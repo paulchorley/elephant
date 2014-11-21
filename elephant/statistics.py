@@ -12,6 +12,7 @@ import numpy as np
 import quantities as pq
 import scipy.stats
 import neo.core
+import conversion
 
 
 def isi(spiketrain, axis=-1):
@@ -182,3 +183,148 @@ def fanofactor(spiketrains):
     else:
         fano = spike_counts.var() / spike_counts.mean()
     return fano
+
+
+def lv(isi):
+    """ Calculate LV Shinomoto (2003) from the given ISI distribution """
+    return np.mean((3.*np.power(isi[:-1]-isi[1:],2))/
+                   np.power(isi[:-1]+isi[1:],2))
+
+
+def corrcoef(spiketrains, binsize, clip=True):
+    '''
+    Matrix of pairwise Pearson's correlation coefficients for a list of
+    spike trains.
+
+    For each spike trains i,j in the list, the correlation coefficient
+    C[i, j] is given by the correlation coefficient between the vectors
+    obtained by binning i and j at the desired bin size. Called b_i, b_j
+    such vectors and m_i, m_j their respective averages:
+
+    C[i,j] = <b_i-m_i, b_j-m_j> / sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>},
+
+    where <.,.> is the scalar product of two vectors.
+    If spiketrains is a list of n spike trains, a n x n matrix is returned.
+    Each entry in the matrix is a real number ranging between -1 (perfectly
+    anticorrelated spike trains) and +1 (perfectly correlated spike trains).
+    If clip is True, the spike trains are clipped before computing the
+    correlation coefficients, so that the binned vectors b_i, b_j are binary.
+
+    Parameters
+    ----------
+    spiketrains : list
+        a list of SpikeTrains with same t_start and t_stop values
+    binsize : Quantity
+        the bin size used to bin the spike trains
+    clip : bool, optional
+        whether to clip spikes of the same spike train falling in the same
+        bin (True) or not (False). If True, the binned spike trains are
+        binary arrays
+
+    Output
+    ------
+    M : ndarrray
+        the sqaure matrix of correlation coefficients. M[i,j] is the
+        correlation coefficient between spiketrains[i] and spiketrains[j]
+
+    '''
+
+    # Check that all spike trains have same t_start and t_stop
+    tstart_0 = spiketrains[0].t_start
+    tstop_0 = spiketrains[0].t_stop
+    assert(all([st.t_start == tstart_0 for st in spiketrains[1:]]))
+    assert(all([st.t_stop == tstop_0 for st in spiketrains[1:]]))
+
+    # Bin the spike trains
+    t_start = spiketrains[0].t_start
+    t_stop = spiketrains[0].t_stop
+    binned_sts = conversion.Binned(
+        spiketrains, binsize=binsize, t_start=t_start, t_stop=t_stop)
+
+    # Create the binary matrix M of binned spike trains
+    if clip is True:
+        M = binned_sts.matrix_clipped()
+    else:
+        M = binned_sts.matrix_unclipped()
+
+    # Return the matrix of correlation coefficients
+    return np.corrcoef(M)
+
+
+def peth(sts, w, t_start=None, t_stop=None, output='counts', clip=False):
+    """
+    Peri-Event Time Histogram (PETH) of a list of spike trains.
+
+    Parameters
+    ----------
+    sts : list of neo.core.SpikeTrain objects
+        Spiketrains with a common time axis (same t_start and t_stop)
+    w : Quantity
+        width of the histogram's time bins.
+    t_start, t_stop : Quantity (optional)
+        Start and stop time of the histogram. Only events in the input
+        spike trains falling between t_start and t_stop (both included) are
+        considered in the histogram. If t_start and/or t_stop are not
+        specified, the maximum t_start of all Spiketrains is used as t_start,
+        and the minimum t_stop is used as t_stop.
+        Default: t_start=t_stop=None
+    output : str (optional)
+        Normalization of the histogram. Can be one of:
+        * 'counts': spike counts at each bin (as integer numbers)
+        * 'mean': mean spike counts per spike train
+        * 'rate': mean spike rate per spike train. Like 'mean', but the
+          counts are additionally normalized by the bin width.
+
+    Returns
+    -------
+    analogSignal : neo.core.AnalogSignal
+        neo.core.AnalogSignal object containing the PETH values.
+        AnalogSignal[j] is the PETH computed between
+        t_start + j * w and t_start + (j + 1) * w.
+
+    """
+
+    # Find the internal range t_start, t_stop where all spike trains are
+    # defined; cut all spike trains taking that time range only
+    max_tstart = max([t.t_start for t in sts])
+    min_tstop = min([t.t_stop for t in sts])
+
+    if t_start is None:
+        t_start = max_tstart
+        if not all([max_tstart == t.t_start for t in sts]):
+            warnings.warn(
+                "Spiketrains have different t_start values -- "
+                "using maximum t_start as t_start.")
+
+    if t_stop is None:
+        t_stop = min_tstop
+        if not all([min_tstop == t.t_stop for t in sts]):
+            warnings.warn(
+                "Spiketrains have different t_stop values -- "
+                "using minimum t_stop as t_stop.")
+
+    sts_cut = [st.time_slice(t_start=t_start, t_stop=t_stop) for st in sts]
+
+    # Bin the spike trains and sum across columns
+    bs = conversion.Binned(sts_cut, t_start=t_start, t_stop=t_stop, binsize=w)
+
+    if clip is True:
+        bin_hist = np.sum(bs.matrix_clipped(), axis=0)
+    else:
+        bin_hist = np.sum(bs.matrix_unclipped(), axis=0)
+
+    # Renormalise the histogram
+    if output == 'counts':
+        # Raw
+        bin_hist = bin_hist * pq.dimensionless
+    elif output == 'mean':
+        # Divide by number of input spike trains
+        bin_hist = bin_hist * 1. / len(sts) * pq.dimensionless
+    elif output == 'rate':
+        # Divide by number of input spike trains and bin width
+        bin_hist = bin_hist * 1. / len(sts) / w
+    else:
+        raise ValueError('Parameter output is not valid.')
+
+    return neo.AnalogSignal(
+        signal=bin_hist, sampling_period=w, t_start=t_start)
