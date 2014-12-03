@@ -4,31 +4,6 @@ import numpy as np
 import quantities as pq
 import matplotlib.pyplot as plt
 
-from neo.io import BlackrockIO
-
-
-
-def load_data(exp_t_start = 0.0*pq.s, exp_t_stop = 10.0*pq.s,
-              mdl_t_start = 0.0*pq.s, mdl_t_stop = 10.0*pq.s, n_mdl = 100):
-
-    session = BlackrockIO("../../data/i140701-004")
-    block = session.read_block(n_starts=[exp_t_start],n_stops=[exp_t_stop],
-                               channel_list=[], nsx=None, units=[],
-                               events=False, waveforms=False)
-    sts_exp = [ st for st in block.segments[0].spiketrains
-            if st.annotations['unit_id'] not in [0,255]
-            and len(st) > 2 ]
-
-    import neo
-    sts = np.load('../../data/sts_mdl.npy')
-    s_start = int(mdl_t_start.rescale(pq.ms).magnitude)
-    s_stop = int(mdl_t_stop.rescale(pq.ms).magnitude)
-    sts_mdl = [ neo.SpikeTrain(st[(st>=s_start)&(st<s_stop)],
-                               t_start = mdl_t_start, t_stop = mdl_t_stop,
-                               units = pq.ms) for st in sts[:n_mdl] ]
-
-    return sts_exp, sts_mdl
-
 
 def spike_raster(sts):
     for i in range(len(sts)):
