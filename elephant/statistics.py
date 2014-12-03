@@ -187,8 +187,12 @@ def fanofactor(spiketrains):
 
 def lv(isi):
     """ Calculate LV Shinomoto (2003) from the given ISI distribution """
-    return np.mean((3.*np.power(isi[:-1]-isi[1:],2))/
-                   np.power(isi[:-1]+isi[1:],2))
+    if type(isi) is pq.Quantity:
+        isi = isi.magnitude
+
+    return np.mean(
+        (3. * np.power(isi[:-1] - isi[1:], 2)) /
+        np.power(isi[:-1] + isi[1:], 2))
 
 
 def corrcoef(spiketrains, binsize, clip=True):
