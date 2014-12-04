@@ -1,7 +1,7 @@
 import numpy
 import quantities as pq
 import neo
-import elephant.rep as rep
+import elephant.conversion as rep
 
 
 def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
@@ -65,7 +65,7 @@ def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
     TODO: make example!
 
     """
-    if isinstance(x, rep.binned_st):
+    if isinstance(x, rep.Binned):
         x_filled = x.filled[0]  # Take the indices of the filled bins in x
         x_mat = x.matrix_clipped()[0] if clip else  x.matrix_unclipped()[0]
         x_filled_howmany = x_mat[x_filled]
@@ -79,7 +79,7 @@ def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
         x_filled = numpy.where(x > 0)[0]
         x_filled_howmany = x[x_filled]
 
-    if isinstance(y, rep.binned_st):
+    if isinstance(y, rep.Binned):
         y_filled = y.filled[0]  # Take the indices of the filled bins in y
         y_mat = y.matrix_clipped()[0] if clip else  y.matrix_unclipped()[0]
         y_filled_howmany = y_mat[y_filled]
@@ -279,30 +279,30 @@ def ccht(x, y, w, window=None, start=None, stop=None, corrected=False,
         raise ValueError('x and y must have the same t_stop attribute')
 
     # Set start. Only spike times >= start will be considered for the CCH
-    if start == None:
+    if start is None:
         start = x.t_start
 
     # Set stop to end of spike trains if None
-    if stop == None:
+    if stop is None:
         if len(x) * len(y) == 0:
-            stop = 0 * x.units if window == None else 2 * window
+            stop = 0 * x.units if window is None else 2 * window
         else:
-            stop = x.t_stop if window == None else max(x.t_stop, window)
+            stop = x.t_stop if window is None else max(x.t_stop, window)
 
     # By default, set smoothing to 0 ms (no smoothing)
-    if smooth == None:
+    if smooth is None:
         smooth = 0 * pq.ms
 
     # Set the window for the CCH
-    win = (stop - start) if window == None else min(window, (stop - start))
+    win = (stop - start) if window is None else min(window, (stop - start))
 
     # Cut the spike trains, keeping the spikes between start and stop only
     x_cut = x if len(x) == 0 else x.time_slice(t_start=start, t_stop=stop)
     y_cut = y if len(y) == 0 else y.time_slice(t_start=start, t_stop=stop)
 
     # Bin the spike trains
-    x_binned = rep.binned_st(x_cut, t_start=start, t_stop=stop, binsize=w)
-    y_binned = rep.binned_st(y_cut, t_start=start, t_stop=stop, binsize=w)
+    x_binned = rep.Binned(x_cut, t_start=start, t_stop=stop, binsize=w)
+    y_binned = rep.Binned(y_cut, t_start=start, t_stop=stop, binsize=w)
 
     # Evaluate the CCH for the binned trains with cchb()
     counts, bin_ids = cchb(
@@ -414,7 +414,7 @@ def cch(x, y, w, lag=None, start=None, stop=None, corrected=False,
     >>> print CCH.times
     [-16.5 -13.5 -10.5  -7.5  -4.5  -1.5   1.5   4.5   7.5  10.5  13.5] ms
     """
-    if isinstance(x, neo.SpikeTrain) and isinstance(y, neo.SpikeTrain):
+    if isinstance(x, neo.core.SpikeTrain) and isinstance(y, neo.core.SpikeTrain):
         CCH, bins = ccht(x, y, w, window=lag, start=start, stop=stop,
             corrected=corrected, smooth=smooth, clip=clip, normed=normed,
             xaxis='time', kernel=kernel)
@@ -489,7 +489,7 @@ def corrcoef(spiketrains, binsize, clip=True):
     # Bin the spike trains
     t_start = spiketrains[0].t_start
     t_stop = spiketrains[0].t_stop
-    binned_sts = rep.binned_st(
+    binned_sts = rep.Binned(
         spiketrains, binsize=binsize, t_start=t_start, t_stop=t_stop)
 
     # Create the binary matrix M of binned spike trains
@@ -546,7 +546,7 @@ def cov(spiketrains, binsize, clip=True):
     # Bin the spike trains
     t_start = spiketrains[0].t_start
     t_stop = spiketrains[0].t_stop
-    binned_sts = rep.binned_st(
+    binned_sts = rep.Binned(
         spiketrains, binsize=binsize, t_start=t_start, t_stop=t_stop)
 
     # Create the binary matrix M of binned spike trains
@@ -661,115 +661,3 @@ def ccht2(x, y, binsize, corrected=False, smooth=0, normed=False,
         return bin_ids[Hlen-Hbins:Hlen+Hbins+1]*binsize+start, counts[Hlen-Hbins:Hlen+Hbins+1]
     else:
         return bin_ids[Hlen-Hbins:Hlen+Hbins+1], counts[Hlen-Hbins:Hlen+Hbins+1]
-
-
-def GICs(links):
-    """
-    Given a list of indirected links connecting two vertices of a graph,
-    returns 1) the groups of all-to-all connected vertices in the graph
-    ("cliques") and 2) the mutually separated groups of units belonging to
-    interconnected cliques ("GICs").
-
-    **Args**:
-      links [list of pairs]
-          a list of pairs, each pair representing the tags of two
-          interconnected nodes in a graph. Links are indirected, i.e.
-          (a,b) = (b,a). Multiple instances of the same link are redundant.
-          Tags must be hashable objects, such as floats, strings, tuples.
-
-    **OUTPUT**:
-      (cliques, GICs): the cliques and GICs of the graph.
-
-    *************************************************************************
-    Example:
-
-    >>> links = (1,2), (1,3), (1,"b"), (5, "a"), ("a", 2), (1, "a"), (2,"b")
-    >>> print GICs(links)
-
-    *************************************************************************
-
-    """
-
-    # Collect the tags of all elements in conns:
-    tags = []
-    for link in links: tags.extend(link)
-    tags = list(set(tags))
-
-    # Map the original tags into integer ids 0,1,2,..., which have an
-    # ordering and can be used to avoid redundant searches
-    Map = {}
-    for i, tag in enumerate(tags): Map[tag] = i
-
-
-    # Use the map to convert the links into the new integer ids
-    links_mapped = set([frozenset((Map[link[0]], Map[link[1]])) for link in links])
-
-    # Define the list of integer IDs and its length
-    ids = range(len(tags))
-    Lids = len(ids)
-
-    # For each ID i, compute the list conns[i] of larger IDs connected to it
-    conns = [[] for i in xrange(Lids-1)]
-    for id1 in ids:
-        for id2 in ids[id1+1:]:
-            if set([id1, id2]) in links_mapped: conns[id1].append(id2)
-
-    # Compute the list "tuples" of all cliques, size by size:
-    # * tuples[0] contains cliques of size 2 (i.e. the original links)
-    # * tuples[1] contains cliques of size 3,
-    # * ...
-    tuples = [[] for i in xrange(Lids-1)]
-    for i in xrange(Lids-2, -1, -1):
-        current_id = ids[i]
-        current_conns = conns[i]
-        if current_conns == []:
-	    pass
-        else:
-            current_tuples = [[] for j in xrange(len(current_conns))]
-            current_tuples[0] = [[current_id,j] for j in current_conns]
-            for j in current_conns:
-                tuples[0].append([current_id,j])
-            p = 0
-            while p < len(current_conns): #-1?
-                for j in xrange(len(current_tuples[p])-1):
-                    for k in xrange(j+1, len(current_tuples[p])):
-		        I = list(set(current_tuples[p][j]) & set(current_tuples[p][j]))
-		        #D = list_simmdiff(current_tuples[p][j], current_tuples[p][k])
-			D = list(set([item for item in current_tuples[p][j] if not item in current_tuples[p][k]]) \
-                            | set([item for item in current_tuples[p][k] if not item in current_tuples[p][j]]))
-		        if D in tuples[len(D)-2]:
-		            U = list(set(I) | set(D))
-		            if U not in tuples[len(U)-2]:
-			        tuples[len(U)-2].append(U)
-		            if U not in current_tuples[len(U)-2]:
-			        current_tuples[len(U)-2].append(U)
-                p +=1
-
-    # Compute the cliques of all-to-all connected MUAs, throwing away from
-    # "tuples" sub-sliques included into larger ones
-    cliques = []
-    for tups in tuples[:0:-1]:
-        for t in tups:
-            if all([any([item not in i for item in t]) for i in cliques]):
-	        cliques.append(sorted(t))
-
-    # Construct GICs as groups of cliques having at least one MUA in common.
-    GIC = [[j for j in i] for i in cliques]
-    j=0
-    while j < len(GIC)-1:
-        k = 1
-        while j+k < len(GIC):
-            if list(set(GIC[j]) & set(GIC[j+k])) != []:
-	        GIC[j] = sorted(set(GIC[j]) | set(GIC[j+k]))
-	        fake = GIC.pop(j+k)
-	        k = 0
-	    k += 1
-        j += 1
-
-    # Map the clique and GIC ids back to the original tags
-    cliques_tagged, GICs_tagged = [], []
-    for clique in cliques: cliques_tagged.append([tags[i] for i in clique])
-    for gic in GIC: GICs_tagged.append([tags[i] for i in gic])
-
-    # Return cliques and GICs
-    return cliques_tagged, GICs_tagged

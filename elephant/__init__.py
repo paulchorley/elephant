@@ -9,6 +9,7 @@ docstring goes here.
 from . import statistics
 from . import conversion
 from . import xcorr
+from . import surrogates
 from . import neo_tools
 
 
