@@ -1,17 +1,15 @@
 
 # coding: utf-8
 
-## DO NOT WORK ON THIS NOTEBOOK WORK ON THE `hbp_review.py` FILE
-
 ### Initialization
 
 # In[13]:
 
 import sys
-sys.path.append('..')
+sys.path.insert(1,'..')
 
 # change this to point to your reachgrasp IO
-sys.path.append('../../dataset_repos/reachgrasp/python')
+sys.path.insert(1,'../../dataset_repos/reachgrasp/python')
 
 import numpy as np
 import quantities as pq
@@ -27,7 +25,7 @@ import elephant
 import rg.restingstateio
 import plots
 
-get_ipython().magic(u'matplotlib inline')
+#get_ipython().magic(u'matplotlib inline')
 
 
 # In[14]:
@@ -45,7 +43,7 @@ reload(plots)
 
 # data should be in a subdirectory 'data' relative to this notebook's location
 # TODO: Make sure this loads only single units -- it's not sorted
-# Note: Use this data sets because it is more stationary than 
+# Note: Use this data sets because it is more stationary than
 session = rg.restingstateio.RestingStateIO("data/i140701-004")
 block = session.read_block(n_starts=[10*pq.s],n_stops=[20*pq.s],channel_list=[], units=[1,2,3])
 
@@ -273,13 +271,13 @@ for ni in [0,1,2,3]:
     for nj in [0,1,2,3]:
         unit_i.append(ni)
         unit_j.append(nj)
-        
+
         print "Cross-correlating ", ni, " and ", nj
         cc_original.append(elephant.xcorr.cch(sts[ni],sts[nj],w=lag_res,lag=max_lag,smooth=smoothing))
 
         surr_i = elephant.surrogates.spike_dithering(sts[ni],dither=50*pq.ms,n=num_surrs)
         surr_j = elephant.surrogates.spike_dithering(sts[nj],dither=50*pq.ms,n=num_surrs)
-        
+
         cc_surrs.append([])
         for surrogate in range(num_surrs):
             cc_surrs[-1].append(elephant.xcorr.cch(surr_i[surrogate],surr_j[surrogate],w=lag_res,lag=max_lag,smooth=smoothing))
@@ -287,7 +285,7 @@ for ni in [0,1,2,3]:
 
 # In[65]:
 
-for selected_unit in range(len(cc_original)):   
+for selected_unit in range(len(cc_original)):
     plt.subplot2grid((4,4),(unit_i[selected_unit],unit_j[selected_unit]))
 
     surr_matrix=np.sort(np.array(cc_surrs[selected_unit]),axis=0)
@@ -300,12 +298,13 @@ for selected_unit in range(len(cc_original)):
     plt.plot(cc_original[selected_unit].times.magnitude,surr_matrix[int(num_surrs*0.05)],color=[0.3,0.3,0.3])
     plt.plot(cc_original[selected_unit].times.magnitude,surr_matrix[int(num_surrs*0.95)],color=[0.3,0.3,0.3])
     plt.plot(cc_original[selected_unit].times.magnitude,cc_original[selected_unit].magnitude)
-    plt.axis('tight')    
+    plt.axis('tight')
 
 
 ### Higher-order analysis (CuBIC) ?
 
 # In[ ]:
+plt.show()
 
 
 
