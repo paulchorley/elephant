@@ -134,12 +134,12 @@ def mean_firing_rate(spiketrain, t_start=None, t_stop=None, axis=None):
 
     if not axis or not found_t_start:
         return np.sum((spiketrain >= t_start) & (spiketrain <= t_stop),
-                      axis=axis) / (t_stop-t_start)
+                      axis=axis) / (t_stop - t_start)
     else:
         # this is needed to handle broadcasting between spiketrain and t_stop
         t_stop_test = np.expand_dims(t_stop, axis)
         return np.sum((spiketrain >= t_start) & (spiketrain <= t_stop_test),
-                      axis=axis) / (t_stop-t_start)
+                      axis=axis) / (t_stop - t_start)
 
 
 # we make `cv` an alias for scipy.stats.variation for the convenience
@@ -194,65 +194,6 @@ def lv(isi):
         (3. * np.power(isi[:-1] - isi[1:], 2)) /
         np.power(isi[:-1] + isi[1:], 2))
 
-
-def corrcoef(spiketrains, binsize, clip=True):
-    '''
-    Matrix of pairwise Pearson's correlation coefficients for a list of
-    spike trains.
-
-    For each spike trains i,j in the list, the correlation coefficient
-    C[i, j] is given by the correlation coefficient between the vectors
-    obtained by binning i and j at the desired bin size. Called b_i, b_j
-    such vectors and m_i, m_j their respective averages:
-
-    C[i,j] = <b_i-m_i, b_j-m_j> / sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>},
-
-    where <.,.> is the scalar product of two vectors.
-    If spiketrains is a list of n spike trains, a n x n matrix is returned.
-    Each entry in the matrix is a real number ranging between -1 (perfectly
-    anticorrelated spike trains) and +1 (perfectly correlated spike trains).
-    If clip is True, the spike trains are clipped before computing the
-    correlation coefficients, so that the binned vectors b_i, b_j are binary.
-
-    Parameters
-    ----------
-    spiketrains : list
-        a list of SpikeTrains with same t_start and t_stop values
-    binsize : Quantity
-        the bin size used to bin the spike trains
-    clip : bool, optional
-        whether to clip spikes of the same spike train falling in the same
-        bin (True) or not (False). If True, the binned spike trains are
-        binary arrays
-
-    Output
-    ------
-    M : ndarrray
-        the sqaure matrix of correlation coefficients. M[i,j] is the
-        correlation coefficient between spiketrains[i] and spiketrains[j]
-
-    '''
-
-    # Check that all spike trains have same t_start and t_stop
-    tstart_0 = spiketrains[0].t_start
-    tstop_0 = spiketrains[0].t_stop
-    assert(all([st.t_start == tstart_0 for st in spiketrains[1:]]))
-    assert(all([st.t_stop == tstop_0 for st in spiketrains[1:]]))
-
-    # Bin the spike trains
-    t_start = spiketrains[0].t_start
-    t_stop = spiketrains[0].t_stop
-    binned_sts = conversion.Binned(
-        spiketrains, binsize=binsize, t_start=t_start, t_stop=t_stop)
-
-    # Create the binary matrix M of binned spike trains
-    if clip is True:
-        M = binned_sts.matrix_clipped()
-    else:
-        M = binned_sts.matrix_unclipped()
-
-    # Return the matrix of correlation coefficients
-    return np.corrcoef(M)
 
 
 def peth(sts, w, t_start=None, t_stop=None, output='counts', clip=False):

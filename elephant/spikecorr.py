@@ -1,7 +1,82 @@
-import numpy
+# -*- coding: utf-8 -*-
+"""
+Spike train correlation
+
+This modules provides functions to calculate correlations between spike trains.
+
+:copyright: Copyright 2014 by the Elephant team, see AUTHORS.txt.
+:license: Modified BSD, see LICENSE.txt for details.
+"""
+import numpy as np
 import quantities as pq
 import neo
 import elephant.conversion as rep
+import conversion
+
+def corrcoef(sts, bin_size, clip=True):
+    '''
+    Calculate the NxN matrix of pairwise Pearson's correlation coefficients
+    between all combinations given a list of N spike trains.
+
+    For each pair of spike trains $(i,j)$ in the list, the correlation
+    coefficient $C[i, j]$ is given by the correlation coefficient between the
+    vectors obtained by binning $i$ and $j$ at the desired bin size. Let $b_i$
+    and $b_j$ denote the binary vectors and $m_i$ and  $m_j$ their respective
+    averages. Then
+
+    $$ C[i,j] = <b_i-m_i, b_j-m_j> / \sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>} $$
+
+    where <..,.> is the scalar product of two vectors.
+
+    If spike trains is a list of n spike trains, a n x n matrix is returned.
+    Each entry in the matrix is a real number ranging between -1 (perfectly
+    anti-correlated spike trains) and +1 (perfectly correlated spike trains).
+
+    If clip is True, the spike trains are clipped before computing the
+    correlation coefficients, so that the binned vectors b_i, b_j are binary.
+
+    Parameters
+    ----------
+    sts : list of SpikeTrain
+        A list of SpikeTrain objects with common t_start and t_stop.
+    bin_size : Quantity
+        The bin size used to bin the spike trains.
+    clip : bool, optional
+        If True, two spikes of the a particular spike train falling in the same
+        bin are counted as 1, resulting in binary binned vectors b_i. If False,
+        the binned vectors $b_i$ contain the actually spike counts.
+        Default: True
+
+    Output
+    ------
+    C : ndarrray
+        The square matrix of correlation coefficients. The element
+        $C[i,j]=C[j,i]$ is the Pearson's correlation coefficient between sts[i]
+        and sts[j]. If sts contains only one SpikeTrain, C=1.0.
+
+    '''
+
+    # Check that all spike trains have same t_start and t_stop
+    tstart_0 = sts[0].t_start
+    tstop_0 = sts[0].t_stop
+    assert(all([st.t_start == tstart_0 for st in sts[1:]]))
+    assert(all([st.t_stop == tstop_0 for st in sts[1:]]))
+
+    # Bin the spike trains
+    t_start = sts[0].t_start
+    t_stop = sts[0].t_stop
+    binned_sts = conversion.Binned(
+        sts, binsize=bin_size, t_start=t_start, t_stop=t_stop)
+
+    # Create the binary matrix M of binned spike trains
+    if clip is True:
+        M = binned_sts.matrix_clipped()
+    else:
+        M = binned_sts.matrix_unclipped()
+
+    # Return the matrix of correlation coefficients
+    return np.corrcoef(M)
+
 
 
 def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
@@ -69,28 +144,28 @@ def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
         x_filled = x.filled[0]  # Take the indices of the filled bins in x
         x_mat = x.matrix_clipped()[0] if clip else  x.matrix_unclipped()[0]
         x_filled_howmany = x_mat[x_filled]
-        del(x_mat)              # Delete big unnecessary object
+        del(x_mat)  # Delete big unnecessary object
     else:
         # TODO: return error instead
-        if type(x) != numpy.ndarray:
-            x = numpy.array(x)
+        if type(x) != np.ndarray:
+            x = np.array(x)
         if clip == True:
             x = 1 * (x > 0)
-        x_filled = numpy.where(x > 0)[0]
+        x_filled = np.where(x > 0)[0]
         x_filled_howmany = x[x_filled]
 
     if isinstance(y, rep.Binned):
         y_filled = y.filled[0]  # Take the indices of the filled bins in y
         y_mat = y.matrix_clipped()[0] if clip else  y.matrix_unclipped()[0]
         y_filled_howmany = y_mat[y_filled]
-        del(y_mat)             # Delete big unnecessary object
+        del(y_mat)  # Delete big unnecessary object
     else:
         # TODO: return error instead
-        if type(y) != numpy.ndarray:
-            y = numpy.array(y)
+        if type(y) != np.ndarray:
+            y = np.array(y)
         if clip == True:
             y = 1 * (y > 0)
-        y_filled = numpy.where(y > 0)[0]
+        y_filled = np.where(y > 0)[0]
         y_filled_howmany = y[y_filled]
 
     # Take the indices of the filled bins in x and y
@@ -114,13 +189,13 @@ def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
     Hbins = Hlen if hlen is None else min(hlen, Hlen)
 
     # Initialize the counts to an array of zeroes, and the bin ids to
-    counts = numpy.zeros(2 * Hbins + 1)
-    bin_ids = numpy.arange(-Hbins, Hbins + 1)
+    counts = np.zeros(2 * Hbins + 1)
+    bin_ids = np.arange(-Hbins, Hbins + 1)
 
     # Compute the cch at lags in -Hbins,...,Hbins only
     for r, i in enumerate(x_filled):
         timediff = y_filled - i
-        timediff_in_range = numpy.all(
+        timediff_in_range = np.all(
             [timediff >= -Hbins, timediff <= Hbins], axis=0)
         timediff = (timediff[timediff_in_range]).reshape((-1,))
         counts[timediff + Hbins] += x_filled_howmany[r] * \
@@ -128,23 +203,23 @@ def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
 
     # Correct the values taking into account lacking contributes at the edges
     if corrected == True:
-        correction = float(Hlen + 1) / numpy.array(
-            Hlen + 1 - abs(numpy.arange(-Hlen, Hlen + 1)), float)
+        correction = float(Hlen + 1) / np.array(
+            Hlen + 1 - abs(np.arange(-Hlen, Hlen + 1)), float)
         counts = counts * correction
 
     # Define the kernel for smoothing as an ndarray
     if hasattr(kernel, '__iter__'):
-        kernel = numpy.array(kernel, dtype=float)
+        kernel = np.array(kernel, dtype=float)
     elif isinstance(kernel, str) and smooth > 1:
         smooth_Nbin = min(int(smooth), Len)
         if kernel == 'hamming':
-            win = numpy.hamming(smooth_Nbin)
+            win = np.hamming(smooth_Nbin)
         elif kernel == 'bartlett':
-            win = numpy.bartlett(smooth_Nbin)
+            win = np.bartlett(smooth_Nbin)
         elif kernel == 'hanning':
-            win = numpy.hanning(smooth_Nbin)
+            win = np.hanning(smooth_Nbin)
         elif kernel == 'boxcar':
-            win = numpy.ones(smooth_Nbin)
+            win = np.ones(smooth_Nbin)
         else:
             raise ValueError(
                 'kernel (%s) can be either an array or one of the following '
@@ -152,14 +227,14 @@ def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
                 % str(kernel))
         kernel = 1. * win / sum(win)
     else:
-        kernel = numpy.array(1)
+        kernel = np.array(1)
 
     # Smooth the cross-correlation histogram with the kernel
-    counts = numpy.convolve(counts, kernel, mode='same')
+    counts = np.convolve(counts, kernel, mode='same')
 
     # Rescale the histogram so that the central bin has height 1, if requested
-    if normed == True:
-        counts = numpy.array(counts, float) / float(counts[Hlen])
+    if normed:
+        counts = np.array(counts, float) / float(counts[Hlen])
 
     # Return only the Hbins bins and counts before and after the central one
     return counts, bin_ids
@@ -442,66 +517,6 @@ def cch(x, y, w, lag=None, start=None, stop=None, corrected=False,
         return CCH
 
 
-def corrcoef(spiketrains, binsize, clip=True):
-    '''
-    Matrix of pairwise Pearson's correlation coefficients for a list of
-    spike trains.
-
-    For each spike trains i,j in the list, the correlation coefficient
-    C[i, j] is given by the correlation coefficient between the vectors
-    obtained by binning i and j at the desired bin size. Called b_i, b_j
-    such vectors and m_i, m_j their respective averages:
-
-    C[i,j] = <b_i-m_i, b_j-m_j> / sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>},
-
-    where <.,.> is the scalar product of two vectors.
-    If spiketrains is a list of n spike trains, a n x n matrix is returned.
-    Each entry in the matrix is a real number ranging between -1 (perfectly
-    anticorrelated spike trains) and +1 (perfectly correlated spike trains).
-    If clip is True, the spike trains are clipped before computing the
-    correlation coefficients, so that the binned vectors b_i, b_j are binary.
-
-    Parameters
-    ----------
-    spiketrains : list
-        a list of SpikeTrains with same t_start and t_stop values
-    binsize : Quantity
-        the bin size used to bin the spike trains
-    clip : bool, optional
-        whether to clip spikes of the same spike train falling in the same
-        bin (True) or not (False). If True, the binned spike trains are
-        binary arrays
-
-    Output
-    ------
-    M : ndarrray
-        the sqaure matrix of correlation coefficients. M[i,j] is the
-        correlation coefficient between spiketrains[i] and spiketrains[j]
-
-    '''
-
-    # Check that all spike trains have same t_start and t_stop
-    tstart_0 = spiketrains[0].t_start
-    tstop_0 = spiketrains[0].t_stop
-    assert(all([st.t_start == tstart_0 for st in spiketrains[1:]]))
-    assert(all([st.t_stop == tstop_0 for st in spiketrains[1:]]))
-
-    # Bin the spike trains
-    t_start = spiketrains[0].t_start
-    t_stop = spiketrains[0].t_stop
-    binned_sts = rep.Binned(
-        spiketrains, binsize=binsize, t_start=t_start, t_stop=t_stop)
-
-    # Create the binary matrix M of binned spike trains
-    if clip is True:
-        M = binned_sts.matrix_clipped()
-    else:
-        M = binned_sts.matrix_unclipped()
-
-    # Return the matrix of correlation coefficients
-    return numpy.corrcoef(M)
-
-
 def cov(spiketrains, binsize, clip=True):
     '''
     Matrix of pairwise covariance coefficients for a list of spike trains.
@@ -556,7 +571,7 @@ def cov(spiketrains, binsize, clip=True):
         M = binned_sts.matrix_unclipped()
 
     # Return the matrix of correlation coefficients
-    return numpy.cov(M)
+    return np.cov(M)
 
 
 def ccht2(x, y, binsize, corrected=False, smooth=0, normed=False,
@@ -571,20 +586,20 @@ def ccht2(x, y, binsize, corrected=False, smooth=0, normed=False,
         cch()
 
     """
-    import numpy
+    import np
 
     # Convert the inputs to arrays
     if type(x) == list:
-        x=numpy.array(x)
+        x = np.array(x)
     if type(y) == list:
-        y=numpy.array(y)
+        y = np.array(y)
     if 'clip' not in kwargs.keys():
         clip = True
     else:
         clip = kwargs['clip']
     #
     #**********************************************************************************************
-    #setting the starting and stopping times for the cch; cutting the spike trains accordingly
+    # setting the starting and stopping times for the cch; cutting the spike trains accordingly
     #**********************************************************************************************
     if 'start' not in kwargs.keys():
         start = min(0, min(x), min(y))
@@ -594,70 +609,70 @@ def ccht2(x, y, binsize, corrected=False, smooth=0, normed=False,
         stop = max(max(x), max(y));
     else:
         stop = kwargs['stop']
-    x_cut = x[numpy.all((start<=x, x<=stop), axis = 0)]
-    y_cut = y[numpy.all((start<=y, y<=stop), axis = 0)]
+    x_cut = x[np.all((start <= x, x <= stop), axis=0)]
+    y_cut = y[np.all((start <= y, y <= stop), axis=0)]
     #
     #**********************************************************************************************
-    #binning the (cut) trains and computing the bin difference
+    # binning the (cut) trains and computing the bin difference
     #**********************************************************************************************
     if clip == True:
-        x_filledbins = numpy.unique(numpy.array((x_cut-start)/binsize, int))
-        y_filledbins = numpy.unique(numpy.array((y_cut-start)/binsize, int))
+        x_filledbins = np.unique(np.array((x_cut - start) / binsize, int))
+        y_filledbins = np.unique(np.array((y_cut - start) / binsize, int))
     else:
-        x_filledbins = numpy.array((x_cut-start)/binsize, int)
-        y_filledbins = numpy.array((y_cut-start)/binsize, int)
-    bindiff = numpy.concatenate([i-y_filledbins for i in x_filledbins], axis = 0)
+        x_filledbins = np.array((x_cut - start) / binsize, int)
+        y_filledbins = np.array((y_cut - start) / binsize, int)
+    bindiff = np.concatenate([i - y_filledbins for i in x_filledbins], axis=0)
     #
     #**********************************************************************************************
-    #computing the number of bins and initializing counts and bin ids. Cutting the bin difference
+    # computing the number of bins and initializing counts and bin ids. Cutting the bin difference
     #**********************************************************************************************
     if 'window' in kwargs.keys():
-        win = min(kwargs['window'], (stop-start)/2.)
+        win = min(kwargs['window'], (stop - start) / 2.)
     else:
-        win = (stop-start)/2.
-    Hlen = min(int((stop-start)/(2*binsize)), int(numpy.ceil((win+smooth/2.)/binsize)))
-    Len = 2*Hlen+1
-    Hbins = min(int(win/binsize), Hlen)
-    counts = numpy.zeros(Len)
-    bin_ids = numpy.arange(-Hlen,Hlen+1)
-    bindiff_cut = bindiff[numpy.all((bindiff>= -Hlen, bindiff <=Hlen), axis = 0)]
+        win = (stop - start) / 2.
+    Hlen = min(int((stop - start) / (2 * binsize)), int(np.ceil((win + smooth / 2.) / binsize)))
+    Len = 2 * Hlen + 1
+    Hbins = min(int(win / binsize), Hlen)
+    counts = np.zeros(Len)
+    bin_ids = np.arange(-Hlen, Hlen + 1)
+    bindiff_cut = bindiff[np.all((bindiff >= -Hlen, bindiff <= Hlen), axis=0)]
     #
     #**********************************************************************************************
-    #computing the counts
+    # computing the counts
     #**********************************************************************************************
     for i in bindiff_cut:
-        counts[Hlen+i] += 1
+        counts[Hlen + i] += 1
     #
     #**********************************************************************************************
-    #correcting, smoothing and normalizing the counts, if requested
+    # correcting, smoothing and normalizing the counts, if requested
     #**********************************************************************************************
     if corrected == True:
-        correction = float(Hlen+1)/numpy.array(Hlen+1-abs(numpy.arange(-Hlen, Hlen+1)), float)
+        correction = float(Hlen + 1) / np.array(Hlen + 1 - abs(np.arange(-Hlen, Hlen + 1)), float)
         counts = counts * correction
     if smooth > binsize:
         if 'kernel' not in kwargs.keys():
             kerneltype = 'boxcar'
         else:
             kerneltype = kwargs['kernel']
-        smooth_Nbin = min(int(smooth/binsize), Len)
+        smooth_Nbin = min(int(smooth / binsize), Len)
         if kerneltype == 'hamming':
-            win = numpy.hamming(smooth_Nbin)
+            win = np.hamming(smooth_Nbin)
         elif kerneltype == 'bartlett':
-            win = numpy.bartlett(smooth_Nbin)
+            win = np.bartlett(smooth_Nbin)
         elif kerneltype == 'hanning':
-            win = numpy.hanning(smooth_Nbin)
+            win = np.hanning(smooth_Nbin)
         elif kerneltype == 'boxcar':
-            win = numpy.ones(smooth_Nbin)
-        kernel = win/sum(win)
-        counts = numpy.convolve(counts, kernel, mode = 'same')
+            win = np.ones(smooth_Nbin)
+        kernel = win / sum(win)
+        counts = np.convolve(counts, kernel, mode='same')
     if normed == True:
-        counts = numpy.array(counts, float)/float(counts[Hlen])
+        counts = np.array(counts, float) / float(counts[Hlen])
     #
     #**********************************************************************************************
-    #returning the CCH; the first output is the array of bin ids if xaxis == 'binid', and the array
-    #of times (for the bin centers) if xaxis == 'time'.
+    # returning the CCH; the first output is the array of bin ids if xaxis == 'binid', and the array
+    # of times (for the bin centers) if xaxis == 'time'.
     #**********************************************************************************************
     if xaxis == 'time':
-        return bin_ids[Hlen-Hbins:Hlen+Hbins+1]*binsize+start, counts[Hlen-Hbins:Hlen+Hbins+1]
+        return bin_ids[Hlen - Hbins:Hlen + Hbins + 1] * binsize + start, counts[Hlen - Hbins:Hlen + Hbins + 1]
     else:
-        return bin_ids[Hlen-Hbins:Hlen+Hbins+1], counts[Hlen-Hbins:Hlen+Hbins+1]
+        return bin_ids[Hlen - Hbins:Hlen + Hbins + 1], counts[Hlen - Hbins:Hlen + Hbins + 1]
