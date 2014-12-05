@@ -7,11 +7,13 @@ This modules provides functions to calculate correlations between spike trains.
 :copyright: Copyright 2014 by the Elephant team, see AUTHORS.txt.
 :license: Modified BSD, see LICENSE.txt for details.
 """
+from __future__ import division
 import numpy as np
 import quantities as pq
 import neo
 import elephant.conversion as rep
 import conversion
+from numpy.core.test_rational import denominator
 
 def corrcoef(sts, bin_size, clip=True):
     '''
@@ -68,14 +70,59 @@ def corrcoef(sts, bin_size, clip=True):
     binned_sts = conversion.Binned(
         sts, binsize=bin_size, t_start=t_start, t_stop=t_stop)
 
-    # Create the binary matrix M of binned spike trains
+    num_neuron = len(sts)
+
+    # NEW
+    C = np.zeros((num_neuron, num_neuron))
+
+    for i in range(num_neuron):
+        for j in range(i, num_neuron):
+            # Calc number of coincidences
+
+            bins_i = binned_sts.filled[i]
+            bins_j = binned_sts.filled[j]
+            inters = np.intersect1d(bins_i, bins_j, assume_unique=(not clip))
+
+            bins_unique_i, bins_unique_counts_i = np.unique(bins_i, return_counts=True)
+            bins_unique_j, bins_unique_counts_j = np.unique(bins_j, return_counts=True)
+            inters_unique = np.intersect1d(bins_unique_i, bins_unique_j, assume_unique=False)
+
+            l = 0.
+            for k in inters_unique:
+                l += bins_unique_counts_i[np.where(bins_unique_i == k)] * bins_unique_counts_j[np.where(bins_unique_j == k)]
+
+            # ab = len(inters)
+            ab = l
+            ma = len(bins_i) / binned_sts.num_bins
+            mb = len(bins_j) / binned_sts.num_bins
+            cc_enum = ab + binned_sts.num_bins * ma * mb - \
+                ma * len(bins_j) - mb * len(bins_i)
+
+            aa = np.dot(bins_unique_counts_i, bins_unique_counts_i)
+            bb = np.dot(bins_unique_counts_j, bins_unique_counts_j)
+#             aa = len(bins_i)
+#             bb = len(bins_j)
+            cc_denom = np.sqrt(
+                (aa + binned_sts.num_bins * (ma ** 2) - 2 * ma * len(bins_i)) *
+                (bb + binned_sts.num_bins * (mb ** 2) - 2 * mb * len(bins_j)))
+
+            if i != j and not clip:
+                print "top", i, j, cc_enum
+                print "bot", i, j, cc_denom
+
+            C[i, j] = C[j, i] = cc_enum / cc_denom
+
+    print C
+    return C
+    # OLD
+    # Create the binary matrix C of binned spike trains
     if clip is True:
-        M = binned_sts.matrix_clipped()
+        C = binned_sts.matrix_clipped()
     else:
-        M = binned_sts.matrix_unclipped()
+        C = binned_sts.matrix_unclipped()
 
     # Return the matrix of correlation coefficients
-    return np.corrcoef(M)
+    return np.corrcoef(C)
 
 
 
