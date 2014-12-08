@@ -9,14 +9,15 @@ This modules provides functions to calculate correlations between spike trains.
 """
 from __future__ import division
 import numpy as np
+import scipy.sparse
 import quantities as pq
 import neo
 import elephant.conversion as rep
-import conversion
-from numpy.core.test_rational import denominator
+# import conversion
+# from numpy.core.test_rational import denominator
 
 
-def corrcoef_nobin(sts, bin_size):
+def corrcoef(sts, bin_size):
     '''
     Calculate the NxN matrix of pairwise Pearson's correlation coefficients
     between all combinations given a list of N spike trains.
@@ -83,10 +84,9 @@ def corrcoef_nobin(sts, bin_size):
             # where N_i is the spike count of spike train $i$ and
             # $\bar{m_i}$ is a vector $\bar{m_i}*\bar{1}$.
             ij = 0
-            for k in sts[i]:
-                for l in sts[j]:
-                    if abs(k - l) < bin_size:
-                        ij += 1
+            for k in sts[i].magnitude:
+                d = np.abs(sts[j].magnitude - k)
+                ij += np.count_nonzero(d < bin_size)
 
             # Number of spikes in i and j
             n_i = len(sts[i])
@@ -97,37 +97,34 @@ def corrcoef_nobin(sts, bin_size):
             cc_enum = ij + num_bins * m_i * m_j - \
                 m_i * n_j - m_j * n_i
 
-            print ij, cc_enum
             # Denominator:
             # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
             #                      =:   ii   + \bar{m_i}^2 - 2 N_i * mi$$
             #
             ii = 0
-            for k in sts[i]:
-                for l in sts[i]:
-                    if abs(k - l) < bin_size:
-                        ii += 1
+            for k in sts[i].magnitude:
+                d = np.abs(sts[i].magnitude - k)
+                ii += np.count_nonzero(d < bin_size)
             jj = 0
-            for k in sts[j]:
-                for l in sts[j]:
-                    if abs(k - l) < bin_size:
-                        jj += 1
+            for k in sts[j].magnitude:
+                d = np.abs(sts[j].magnitude - k)
+                jj += np.count_nonzero(d < bin_size)
             cc_denom = np.sqrt(
                 (ii + num_bins * (m_i ** 2) -
                     2 * m_i * n_i) *
                 (jj + num_bins * (m_j ** 2) -
                     2 * m_j * n_j))
 
-            print ii, cc_denom
-
+            # Fill entry of correlation matrix
             C[i, j] = C[j, i] = cc_enum / cc_denom
+
     return C
 
 
-def corrcoef(sts, bin_size, clip=True):
+def corrcoef_binned(binned_sts, clip=False):
     '''
     Calculate the NxN matrix of pairwise Pearson's correlation coefficients
-    between all combinations given a list of N spike trains.
+    between all combinations given a N binned spike trains.
 
     For each pair of spike trains $(i,j)$ in the list, the correlation
     coefficient $C[i, j]$ is given by the correlation coefficient between the
@@ -140,47 +137,42 @@ def corrcoef(sts, bin_size, clip=True):
 
     where <..,.> is the scalar product of two vectors.
 
-    If spike trains is a list of n spike trains, a n x n matrix is returned.
+    For an input of n spike trains, a n x n matrix is returned.
     Each entry in the matrix is a real number ranging between -1 (perfectly
     anti-correlated spike trains) and +1 (perfectly correlated spike trains).
 
-    If clip is True, the spike trains are clipped before computing the
+    If clip is True, the binned spike trains are clipped before computing the
     correlation coefficients, so that the binned vectors b_i, b_j are binary.
 
     Parameters
     ----------
-    sts : list of SpikeTrain
-        A list of SpikeTrain objects with common t_start and t_stop.
-    bin_size : Quantity
-        The bin size used to bin the spike trains.
+    binned_sts : elephant.conversion.Binned
+        A binned spike train class containing the spike trains to be evaluated.
     clip : bool, optional
         If True, two spikes of the a particular spike train falling in the same
         bin are counted as 1, resulting in binary binned vectors b_i. If False,
         the binned vectors $b_i$ contain the actually spike counts.
-        Default: True
+        Default: False
 
     Output
     ------
     C : ndarrray
         The square matrix of correlation coefficients. The element
-        $C[i,j]=C[j,i]$ is the Pearson's correlation coefficient between sts[i]
-        and sts[j]. If sts contains only one SpikeTrain, C=1.0.
+        $C[i,j]=C[j,i]$ is the Pearson's correlation coefficient between
+        binned_sts[i] and binned_sts[j]. If binned_sts contains only one
+        SpikeTrain, C=1.0.
 
+    Notes
+    -----
+    * The spike trains in the binned structure are assumed to all cover the
+      complete time span of binned_sts [t_start,t_stop).
+
+    Example
+    -------
+    >>>
     '''
-
-    # Check that all spike trains have same t_start and t_stop
-    t_start = sts[0].t_start
-    t_stop = sts[0].t_stop
-    if not all([st.t_start == t_start for st in sts[1:]]) or \
-            not all([st.t_stop == t_stop for st in sts[1:]]):
-        raise ValueError(
-            "All spike trains must have common t_start and t_stop.")
-
-    # Bin the spike trains
-    binned_sts = conversion.Binned(
-        sts, binsize=bin_size, t_start=t_start, t_stop=t_stop)
-
-    num_neuron = len(sts)
+    # TODO: need a num_st method!
+    num_neuron = binned_sts.matrix_unclipped().shape[0]
 
     # Pre-allocate correlation matrix
     C = np.zeros((num_neuron, num_neuron))
@@ -230,7 +222,6 @@ def corrcoef(sts, bin_size, clip=True):
             m_j = n_j / binned_sts.num_bins
             cc_enum = ij + binned_sts.num_bins * m_i * m_j - \
                 m_i * n_j - m_j * n_i
-            print ij, cc_enum
 
             # Denominator:
             # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
@@ -247,23 +238,41 @@ def corrcoef(sts, bin_size, clip=True):
                     2 * m_i * n_i) *
                 (jj + binned_sts.num_bins * (m_j ** 2) -
                     2 * m_j * n_j))
-            print ii, cc_denom
 
+            # Fill entry of correlation matrix
             C[i, j] = C[j, i] = cc_enum / cc_denom
     return C
 
-    # OLD
-    # Create the binary matrix C of binned spike trains
-    if clip is True:
-        C = binned_sts.matrix_clipped()
+    # ---- Alternate version: does not work since spase matrix has no
+    #      addition of scalars implemented --> workaround possible?
+    if clip:
+        mat = scipy.sparse.csr_matrix(binned_sts.matrix_clipped())
     else:
-        C = binned_sts.matrix_unclipped()
+        mat = scipy.sparse.csr_matrix(binned_sts.matrix_unclipped())
 
-    # Return the matrix of correlation coefficients
-    return np.corrcoef(C)
+    # TODO: need a num_st method!
+    num_neuron = binned_sts.matrix_unclipped().shape[0]
+
+    # Pre-allocate correlation matrix
+    C = np.zeros((num_neuron, num_neuron))
+
+    for i in range(num_neuron):
+        for j in range(i, num_neuron):
+            mean_i = mat[i].mean()
+            mean_j = mat[j].mean()
+
+            # Fill entry of correlation matrix
+            C[i, j] = C[j, i] = \
+                np.dot(mat[i] - mean_i, mat[j] - mean_j) / \
+                np.sqrt(
+                    np.dot(mat[i] - mean_i, mat[i] - mean_i) *
+                    np.dot(mat[j] - mean_j, mat[j] - mean_j))
+
+    return C
 
 
-def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
+def cchb(
+        x, y, hlen=None, corrected=False, smooth=0, clip=False,
         normed=False, kernel='boxcar'):
     """
     Computes the cross-correlation histogram (CCH) between two binned
