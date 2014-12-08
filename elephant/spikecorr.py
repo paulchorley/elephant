@@ -59,54 +59,82 @@ def corrcoef(sts, bin_size, clip=True):
     '''
 
     # Check that all spike trains have same t_start and t_stop
-    tstart_0 = sts[0].t_start
-    tstop_0 = sts[0].t_stop
-    assert(all([st.t_start == tstart_0 for st in sts[1:]]))
-    assert(all([st.t_stop == tstop_0 for st in sts[1:]]))
-
-    # Bin the spike trains
     t_start = sts[0].t_start
     t_stop = sts[0].t_stop
+    if not all([st.t_start == t_start for st in sts[1:]]) or \
+            not all([st.t_stop == t_stop for st in sts[1:]]):
+        raise ValueError(
+            "All spike trains must have common t_start and t_stop.")
+
+    # Bin the spike trains
     binned_sts = conversion.Binned(
         sts, binsize=bin_size, t_start=t_start, t_stop=t_stop)
 
     num_neuron = len(sts)
 
-    # NEW
+    # Pre-allocate correlation matrix
     C = np.zeros((num_neuron, num_neuron))
 
     for i in range(num_neuron):
         for j in range(i, num_neuron):
-            # Calc number of coincidences
-
+            # Get positions (bin IDs) of non-zero entries
             bins_i = binned_sts.filled[i]
             bins_j = binned_sts.filled[j]
-            inters = np.intersect1d(bins_i, bins_j, assume_unique=(not clip))
 
-            bins_unique_i, bins_unique_counts_i = np.unique(bins_i, return_counts=True)
-            bins_unique_j, bins_unique_counts_j = np.unique(bins_j, return_counts=True)
-            inters_unique = np.intersect1d(bins_unique_i, bins_unique_j, assume_unique=False)
+            # Find unique bin IDs and corresponding spike counts per bin
+            bins_unique_i, bins_unique_counts_i = np.unique(
+                bins_i, return_counts=True)
+            bins_unique_j, bins_unique_counts_j = np.unique(
+                bins_j, return_counts=True)
 
-            l = 0.
-            for k in inters_unique:
-                l += bins_unique_counts_i[np.where(bins_unique_i == k)] * bins_unique_counts_j[np.where(bins_unique_j == k)]
+            # Intersect indices to identify coincident spikes
+            inters_unique = np.intersect1d(
+                bins_unique_i, bins_unique_j, assume_unique=True)
 
-            # ab = len(inters)
-            ab = l
-            ma = len(bins_i) / binned_sts.num_bins
-            mb = len(bins_j) / binned_sts.num_bins
-            cc_enum = ab + binned_sts.num_bins * ma * mb - \
-                ma * len(bins_j) - mb * len(bins_i)
+            # Number of spikes in i and j
+            if clip:
+                n_i = len(bins_unique_i)
+                n_j = len(bins_unique_j)
+            else:
+                n_i = len(bins_i)
+                n_j = len(bins_j)
 
-            aa = np.dot(bins_unique_counts_i, bins_unique_counts_i)
-            bb = np.dot(bins_unique_counts_j, bins_unique_counts_j)
-#             aa = len(bins_i)
-#             bb = len(bins_j)
+            # Enumerator:
+            # $$<b_i-m_i, b_j-m_j> = b_i*b_j + m_i*m_j
+            #                        - b_i * \bar{mj} - b_j * \bar{m_i}
+            #                      =:   ij   + m_i*m_j - N_i * mj - N_j * m_i$$
+            # where N_i is the spike count of spike train $i$ and
+            # $\bar{m_i}$ is a vector $\bar{m_i}*\bar{1}$.
+            if clip:
+                ij = len(inters_unique)
+            else:
+                ij = 0.
+                for k in inters_unique:
+                    ij += bins_unique_counts_i[np.where(bins_unique_i == k)] * \
+                        bins_unique_counts_j[np.where(bins_unique_j == k)]
+
+            m_i = n_i / binned_sts.num_bins
+            m_j = n_j / binned_sts.num_bins
+            cc_enum = ij + binned_sts.num_bins * m_i * m_j - \
+                m_i * n_j - m_j * n_i
+
+            # Denominator:
+            # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
+            #                      =:   ii   + \bar{m_i}^2 - 2 N_i * mi$$
+            #
+            if clip:
+                ii = len(bins_unique_i)
+                jj = len(bins_unique_j)
+            else:
+                ii = np.dot(bins_unique_counts_i, bins_unique_counts_i)
+                jj = np.dot(bins_unique_counts_j, bins_unique_counts_j)
             cc_denom = np.sqrt(
-                (aa + binned_sts.num_bins * (ma ** 2) - 2 * ma * len(bins_i)) *
-                (bb + binned_sts.num_bins * (mb ** 2) - 2 * mb * len(bins_j)))
+                (ii + binned_sts.num_bins * (m_i ** 2) -
+                    2 * m_i * n_i) *
+                (jj + binned_sts.num_bins * (m_j ** 2) -
+                    2 * m_j * n_j))
 
-            if i != j and not clip:
+            if i != j and clip:
                 print "top", i, j, cc_enum
                 print "bot", i, j, cc_denom
 
@@ -114,6 +142,7 @@ def corrcoef(sts, bin_size, clip=True):
 
     print C
     return C
+
     # OLD
     # Create the binary matrix C of binned spike trains
     if clip is True:
