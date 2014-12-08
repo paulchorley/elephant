@@ -15,6 +15,115 @@ import elephant.conversion as rep
 import conversion
 from numpy.core.test_rational import denominator
 
+
+def corrcoef_nobin(sts, bin_size):
+    '''
+    Calculate the NxN matrix of pairwise Pearson's correlation coefficients
+    between all combinations given a list of N spike trains.
+
+    For each pair of spike trains $(i,j)$ in the list, the correlation
+    coefficient $C[i, j]$ is given by the correlation coefficient between the
+    vectors obtained by binning $i$ and $j$ at the desired bin size. Let $b_i$
+    and $b_j$ denote the binary vectors and $m_i$ and  $m_j$ their respective
+    averages. Then
+
+    $$ C[i,j] = <b_i-m_i, b_j-m_j> /
+               \sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>} $$
+
+    where <..,.> is the scalar product of two vectors.
+
+    If spike trains is a list of n spike trains, a n x n matrix is returned.
+    Each entry in the matrix is a real number ranging between -1 (perfectly
+    anti-correlated spike trains) and +1 (perfectly correlated spike trains).
+
+    If clip is True, the spike trains are clipped before computing the
+    correlation coefficients, so that the binned vectors b_i, b_j are binary.
+
+    Parameters
+    ----------
+    sts : list of SpikeTrain
+        A list of SpikeTrain objects with common t_start and t_stop.
+    bin_size : Quantity
+        The bin size used to bin the spike trains.
+    clip : bool, optional
+        If True, two spikes of the a particular spike train falling in the same
+        bin are counted as 1, resulting in binary binned vectors b_i. If False,
+        the binned vectors $b_i$ contain the actually spike counts.
+        Default: True
+
+    Output
+    ------
+    C : ndarrray
+        The square matrix of correlation coefficients. The element
+        $C[i,j]=C[j,i]$ is the Pearson's correlation coefficient between sts[i]
+        and sts[j]. If sts contains only one SpikeTrain, C=1.0.
+
+    '''
+
+    # Check that all spike trains have same t_start and t_stop
+    t_start = sts[0].t_start
+    t_stop = sts[0].t_stop
+    if not all([st.t_start == t_start for st in sts[1:]]) or \
+            not all([st.t_stop == t_stop for st in sts[1:]]):
+        raise ValueError(
+            "All spike trains must have common t_start and t_stop.")
+
+    num_bins = np.ceil((t_stop - t_start) / bin_size).magnitude
+    num_neuron = len(sts)
+
+    # Pre-allocate correlation matrix
+    C = np.zeros((num_neuron, num_neuron))
+
+    for i in range(num_neuron):
+        for j in range(i, num_neuron):
+            # Enumerator:
+            # $$<b_i-m_i, b_j-m_j> = b_i*b_j + m_i*m_j
+            #                        - b_i * \bar{mj} - b_j * \bar{m_i}
+            #                      =:   ij   + m_i*m_j - N_i * mj - N_j * m_i$$
+            # where N_i is the spike count of spike train $i$ and
+            # $\bar{m_i}$ is a vector $\bar{m_i}*\bar{1}$.
+            ij = 0
+            for k in sts[i]:
+                for l in sts[j]:
+                    if abs(k - l) < bin_size:
+                        ij += 1
+
+            # Number of spikes in i and j
+            n_i = len(sts[i])
+            n_j = len(sts[j])
+
+            m_i = n_i / num_bins
+            m_j = n_j / num_bins
+            cc_enum = ij + num_bins * m_i * m_j - \
+                m_i * n_j - m_j * n_i
+
+            print ij, cc_enum
+            # Denominator:
+            # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
+            #                      =:   ii   + \bar{m_i}^2 - 2 N_i * mi$$
+            #
+            ii = 0
+            for k in sts[i]:
+                for l in sts[i]:
+                    if abs(k - l) < bin_size:
+                        ii += 1
+            jj = 0
+            for k in sts[j]:
+                for l in sts[j]:
+                    if abs(k - l) < bin_size:
+                        jj += 1
+            cc_denom = np.sqrt(
+                (ii + num_bins * (m_i ** 2) -
+                    2 * m_i * n_i) *
+                (jj + num_bins * (m_j ** 2) -
+                    2 * m_j * n_j))
+
+            print ii, cc_denom
+
+            C[i, j] = C[j, i] = cc_enum / cc_denom
+    return C
+
+
 def corrcoef(sts, bin_size, clip=True):
     '''
     Calculate the NxN matrix of pairwise Pearson's correlation coefficients
@@ -26,7 +135,8 @@ def corrcoef(sts, bin_size, clip=True):
     and $b_j$ denote the binary vectors and $m_i$ and  $m_j$ their respective
     averages. Then
 
-    $$ C[i,j] = <b_i-m_i, b_j-m_j> / \sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>} $$
+    $$ C[i,j] = <b_i-m_i, b_j-m_j> /
+               \sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>} $$
 
     where <..,.> is the scalar product of two vectors.
 
@@ -110,13 +220,17 @@ def corrcoef(sts, bin_size, clip=True):
             else:
                 ij = 0.
                 for k in inters_unique:
-                    ij += bins_unique_counts_i[np.where(bins_unique_i == k)] * \
-                        bins_unique_counts_j[np.where(bins_unique_j == k)]
+                    ij += \
+                        bins_unique_counts_i[
+                            np.where(bins_unique_i == k)][0] * \
+                        bins_unique_counts_j[
+                            np.where(bins_unique_j == k)][0]
 
             m_i = n_i / binned_sts.num_bins
             m_j = n_j / binned_sts.num_bins
             cc_enum = ij + binned_sts.num_bins * m_i * m_j - \
                 m_i * n_j - m_j * n_i
+            print ij, cc_enum
 
             # Denominator:
             # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
@@ -133,14 +247,9 @@ def corrcoef(sts, bin_size, clip=True):
                     2 * m_i * n_i) *
                 (jj + binned_sts.num_bins * (m_j ** 2) -
                     2 * m_j * n_j))
-
-            if i != j and clip:
-                print "top", i, j, cc_enum
-                print "bot", i, j, cc_denom
+            print ii, cc_denom
 
             C[i, j] = C[j, i] = cc_enum / cc_denom
-
-    print C
     return C
 
     # OLD
@@ -152,7 +261,6 @@ def corrcoef(sts, bin_size, clip=True):
 
     # Return the matrix of correlation coefficients
     return np.corrcoef(C)
-
 
 
 def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,
