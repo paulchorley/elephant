@@ -3,14 +3,10 @@
 Created on Thu Dec  4 12:24:06 2014
 @author: zehl
 
-blackrockio
-===========
-
-Classes
--------
-
-BlackrockIO    - class to enable reading of BlackrockIO files
+mesocircuitio
+=============
 """
+
 import os
 import datetime
 
@@ -25,7 +21,7 @@ import util.hdf5_wrapper as h5py
 if __name__ == '__main__':
     pass
 
-class UAModelIO(BaseIO):
+class MesoCircuitIO(BaseIO):
     """
     Class for reading data in a data file saved from a simulation from the
     Utah Array Model in NEST.
@@ -52,7 +48,7 @@ class UAModelIO(BaseIO):
 
     # The IO name and the file extensions it uses
     name = 'UAModel'
-    description = 'This IO reads .h5 file of the Utah Array Model simulated '+\
+    description = 'This IO reads .h5 file of the Utah Array Model simulated ' + \
         'in NEST.'
     extensions = ['h5']
 
@@ -87,7 +83,7 @@ class UAModelIO(BaseIO):
         '''
 
         if self._print_diagnostic:
-            print('UAModelIO: ' + text)
+            print('MesoCircuitIO: ' + text)
 
     def _associate(self, filename):
         """
@@ -113,7 +109,7 @@ class UAModelIO(BaseIO):
         self.associated_file = filename
 
         # Create parameter containers
-        self.parameters= {}
+        self.parameters = {}
         self.parameters_electrodes = {}
         self.parameters["Filename"] = self.fileprefix
         self.parameters["Fileformat"] = self.fileformat
@@ -164,11 +160,11 @@ class UAModelIO(BaseIO):
             self.parameters["NeuronDensity"] = {}
             for l, lid in enumerate(self.parameters['LayersAvailable']):
                 self.parameters["NeuronDensity"][lid] = \
-                    uamodel['metadata']['neuron_densities_mm-2'][l] / pq.mm**2
+                    uamodel['metadata']['neuron_densities_mm-2'][l] / pq.mm ** 2
 
             # Electrode parameters
             for chid in self.channel_ids:
-                ep = uamodel['metadata']['electrode_positions_mm'][:,chid] * \
+                ep = uamodel['metadata']['electrode_positions_mm'][:, chid] * \
                     pq.mm
                 es = uamodel['metadata']['electrode_sensitivity_mm'] * pq.mm
                 self.parameters_electrodes[chid] = {'Position': ep,
@@ -308,19 +304,19 @@ class UAModelIO(BaseIO):
         #=======================================================================
 
         # Correct input for n_starts and n_stops?
-        if n_starts == None:
+        if n_starts is None:
             n_starts = [None]
         elif type(n_starts) == pq.Quantity:
             n_starts = [n_starts]
         elif type(n_starts) != list or \
-            any([(type(i) != pq.Quantity and i != None) for i in n_starts]):
+            any([(type(i) != pq.Quantity and i is not None) for i in n_starts]):
             raise ValueError('Invalid specification of n_starts.')
-        if n_stops == None:
+        if n_stops is None:
             n_stops = [None]
         elif type(n_stops) == pq.Quantity:
             n_stops = [n_stops]
         elif type(n_stops) != list or \
-            any([(type(i) != pq.Quantity and i != None) for i in n_stops]):
+            any([(type(i) != pq.Quantity and i is not None) for i in n_stops]):
             raise ValueError('Invalid specification of n_stops.')
 
         # Load all layers?
@@ -330,7 +326,7 @@ class UAModelIO(BaseIO):
         if type(layer_list) is str:
             # Change format if layer is not given as list
             layer_list = [layer_list]
-        if layer_list == None:
+        if layer_list is None:
             # Select no channel
             layer_list = []
         if type(layer_list) != list:
@@ -343,7 +339,7 @@ class UAModelIO(BaseIO):
         if channel_list == []:
             # Select all channels
             channel_list = self.channel_ids
-        if channel_list == None:
+        if channel_list is None:
             # Select no channel
             channel_list = []
         if type(channel_list) != list:
@@ -394,25 +390,25 @@ class UAModelIO(BaseIO):
         for (sidx, n_start_i, n_stop_i) in \
             zip(range(len(n_starts)), n_starts, n_stops):
             # Make sure start time < end time
-            if n_start_i != None and n_stop_i != None and n_start_i >= n_stop_i:
-                raise ValueError('An n_starts value is larger than the '+
+            if n_start_i is not  None and n_stop_i is not None and n_start_i >= n_stop_i:
+                raise ValueError('An n_starts value is larger than the ' +
                     'corresponding n_stops value.')
 
             # Define minimum tstart and maximum tstop as start and stop for
             # segment if n_start_i and n_stop_i is None
-            if n_start_i == None:
+            if n_start_i is None:
                 tstart.append(pq.Quantity(0, self.dt_unit, dtype=int))
             else:
                 tstart.append(n_start_i)
-            if n_stop_i == None:
+            if n_stop_i is None:
                 tstop.append(self.get_max_time.rescale(self.dt_unit))
             else:
                 tstop.append(n_stop_i)
 
             # Create Segment for given tstart and tstop
             seg = neo.Segment(
-                name="Segment %i"%sidx,
-                description='Simulated time from %s to %s'%(
+                name="Segment %i" % sidx,
+                description='Simulated time from %s to %s' % (
                     str(tstart[-1]), str(tstop[-1])),
                 file_origin=self.associated_file,
                 rec_datetime=recdatetime,
@@ -432,12 +428,12 @@ class UAModelIO(BaseIO):
 
             # Create RecordingChannelGroup for each layer
             rcg = neo.RecordingChannelGroup(
-                name="Layer %s"%lid,
-                description="Layer %s of %s, %s"%(lid,
+                name="Layer %s" % lid,
+                description="Layer %s of %s, %s" % (lid,
                     os.path.basename(self.associated_file),
                     self.parameters['ParameterspaceID']),
                 channel_indexes=chids,
-                channel_names=["Layer %s, Channel %i"%(lid, chid) for \
+                channel_names=["Layer %s, Channel %i" % (lid, chid) for \
                     chid in chids],
                 file_origin=self.associated_file,
                 neuron_density=self.parameters['NeuronDensity'][lid])
@@ -449,7 +445,7 @@ class UAModelIO(BaseIO):
                 # channel_list for each RecordingChannelGroup (layer)
                 rcg.recordingchannels.append(
                     neo.RecordingChannel(
-                        name="Layer %s, Channel %i"%(lid, chid),
+                        name="Layer %s, Channel %i" % (lid, chid),
                         index=chid,
                         file_origin=self.associated_file,
                         coordinate=self.parameters_electrodes[chid]['Position'],
@@ -462,12 +458,12 @@ class UAModelIO(BaseIO):
                 uidx = 0
                 for ut in unit_type:
                     # Load data for each channel
-                    path = '/'.join([lid+ut[0].upper(), 'ch%02i'%chid])
+                    path = '/'.join([lid + ut[0].upper(), 'ch%02i' % chid])
                     data = h5py.load_h5(self.associated_file, path=path)
 
                     # Get units as they are defined
                     all_units = [int(u) for u in data.keys()]
-                    if units == None:
+                    if units is None:
                         # Select no units
                         unitids = []
                     elif units == []:
@@ -494,7 +490,7 @@ class UAModelIO(BaseIO):
                         rcg.units.append(
                             neo.Unit(
                                 channel_indexes=chid,
-                                name="Channel %i, Unit %i, %s"%(chid, uid, ut),
+                                name="Channel %i, Unit %i, %s" % (chid, uid, ut),
                                 file_origin=self.associated_file,
                                 channel_id=chid,
                                 unit_id=uid,
@@ -504,7 +500,7 @@ class UAModelIO(BaseIO):
 
                         # Create spiketrains for each segment
                         for sidx in range(len(bl.segments)):
-                            temp = (data['%02i'%uid] * pq.ms).rescale(
+                            temp = (data['%02i' % uid] * pq.ms).rescale(
                                 self.dt_unit)
                             # Mask for getting spikes for spiketrain of segment
                             mask = (((temp >= tstart[sidx]) -
@@ -517,7 +513,7 @@ class UAModelIO(BaseIO):
                                 t_start=tstart[sidx],
                                 t_stop=tstop[sidx],
                                 sampling_rate=self.time_res,
-                                name="Segment %i, Channel %i, Unit %i, %s"%(
+                                name="Segment %i, Channel %i, Unit %i, %s" % (
                                     sidx, chid, uid, ut),
                                 file_origin=self.associated_file,
                                 segment_id=sidx,
@@ -577,7 +573,7 @@ class UAModelIO(BaseIO):
 
 
 def tests(filename, save_as):
-    obj = UAModelIO(filename, print_diagnostic=True)
+    obj = MesoCircuitIO(filename, print_diagnostic=True)
     bl = obj.read_block()
     obj.save_block(bl, save_as)
 
@@ -587,6 +583,6 @@ def tests(filename, save_as):
 
     return obj, bl, lbl
 
-filename = '/home/zehl/projects/model_NEO-IO/example_data/utah_array_spikes_60s.h5'
-save_as = '/home/zehl/projects/model_NEO-IO/example_data/uaspikes_60s.hdf5'
-obj, bl, lbl = tests(filename, save_as)
+# filename = '/home/zehl/projects/model_NEO-IO/example_data/utah_array_spikes_60s.h5'
+# save_as = '/home/zehl/projects/model_NEO-IO/example_data/uaspikes_60s.hdf5'
+# obj, bl, lbl = tests(filename, save_as)
