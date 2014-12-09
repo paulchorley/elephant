@@ -8,11 +8,12 @@ docstring goes here.
 
 from __future__ import division, print_function
 
+import warnings
 import numpy as np
 import quantities as pq
 import scipy.stats
 import neo.core
-import conversion
+import elephant.conversion as conv
 
 
 def isi(spiketrain, axis=-1):
@@ -195,7 +196,6 @@ def lv(isi):
         np.power(isi[:-1] + isi[1:], 2))
 
 
-
 def peth(sts, w, t_start=None, t_stop=None, output='counts', clip=False):
     """
     Peri-Event Time Histogram (PETH) of a list of spike trains.
@@ -251,7 +251,7 @@ def peth(sts, w, t_start=None, t_stop=None, output='counts', clip=False):
     sts_cut = [st.time_slice(t_start=t_start, t_stop=t_stop) for st in sts]
 
     # Bin the spike trains and sum across columns
-    bs = conversion.Binned(sts_cut, t_start=t_start, t_stop=t_stop, binsize=w)
+    bs = conv.Binned(sts_cut, t_start=t_start, t_stop=t_stop, binsize=w)
 
     if clip is True:
         bin_hist = np.sum(bs.matrix_clipped(), axis=0)
