@@ -10,7 +10,10 @@ from __future__ import division, print_function
 
 import numpy as np
 import quantities as pq
+import scipy.sparse as sps
+import scipy
 import neo
+
 
 def binarize(spiketrain, sampling_rate=None, t_start=None, t_stop=None,
              return_times=None):
@@ -155,6 +158,62 @@ def binarize(spiketrain, sampling_rate=None, t_start=None, t_stop=None,
                                           sampling_period), units=units)
 
 
+
+###############################################################################
+#
+# Methods to calculate parameters, t_start, t_stop, bin size, number of bins
+#
+###############################################################################
+def calc_tstart(num_bins, binsize, t_stop):
+    """
+    Calculates the start point from given parameter.
+
+    Calculates the start point :attr:`t_start` from the three parameter
+    :attr:`t_stop`, :attr:`num_bins` and :attr`binsize`.
+
+    Parameters
+    ----------
+    num_bins: int
+        Number of bins
+    binsize: quantities.Quantity
+        Size of Bins
+    t_stop: quantities.Quantity
+        Stop time
+
+    Returns
+    -------
+    t_start : quantities.Quantity
+        Starting point calculated from given parameter.
+    """
+    if num_bins is not None and binsize is not None and t_stop is not None:
+        return t_stop.rescale(binsize.units) - num_bins * binsize
+
+
+def calc_tstop(num_bins, binsize, t_start):
+    """
+    Calculates the stop point from given parameter.
+
+    Calculates the stop point :attr:`t_stop` from the three parameter
+    :attr:`t_start`, :attr:`num_bins` and :attr`binsize`.
+
+    Parameters
+    ----------
+    num_bins: int
+        Number of bins
+    binsize: quantities.Quantity
+        Size of bins
+    t_start: quantities.Quantity
+        Start time
+
+    Returns
+    -------
+    t_stop : quantities.Quantity
+        Stoping point calculated from given parameter.
+    """
+    if num_bins is not None and binsize is not None and t_start is not None:
+        return t_start.rescale(binsize.units) + num_bins * binsize
+
+
 def calc_num_bins(binsize, t_start, t_stop):
     """
     Calculates the number of bins from given parameter.
@@ -190,6 +249,72 @@ def calc_num_bins(binsize, t_start, t_stop):
             binsize.units) / binsize).magnitude)
 
 
+def calc_binsize(num_bins, t_start, t_stop):
+    """
+    Calculates the stop point from given parameter.
+
+    Calculates the size of bins :attr:`binsize` from the three parameter
+    :attr:`num_bins`, :attr:`t_start` and :attr`t_stop`.
+
+    Parameters
+    ----------
+    num_bins: int
+        Number of bins
+    t_start: quantities.Quantity
+        Start time
+    t_stop
+       Stop time
+
+    Returns
+    -------
+    binsize : quantities.Quantity
+        Size of bins calculated from given parameter.
+
+    Raises
+    ------
+    ValueError :
+        Raised when :attr:`t_stop` is smaller than :attr:`t_start`".
+    """
+
+    if num_bins is not None and t_start is not None and t_stop is not None:
+        if t_stop < t_start:
+            raise ValueError("t_stop (%s) is smaller than t_start (%s)"
+                             % (t_stop, t_start))
+        return (t_stop - t_start) / num_bins
+
+
+def set_start_stop_from_input(spiketrains):
+    """
+    Sets the start :attr:`t_start`and stop :attr:`t_stop` point
+    from given input.
+
+    If one nep.SpikeTrain objects is given the start :attr:`t_stop `and stop
+    :attr:`t_stop` of the spike train is returned.
+    Otherwise the aligned times are returned, which are the maximal start point
+    and minimal stop point.
+
+    Parameters
+    ----------
+    spiketrains: neo.SpikeTrain object, list or array of neo.core.SpikeTrain
+                 objects
+        List of neo.core SpikeTrain objects to extract `t_start` and
+        `t_stop` from.
+
+    Returns
+    -------
+    start : quantities.Quantity
+        Start point extracted from input :attr:`spiketrains`
+    stop : quantities.Quantity
+        Stop point extracted from input :attr:`spiketrains`
+    """
+    if isinstance(spiketrains, neo.SpikeTrain):
+        return spiketrains.t_start, spiketrains.t_stop
+    else:
+        start = max([elem.t_start for elem in spiketrains])
+        stop = min([elem.t_stop for elem in spiketrains])
+    return start, stop
+
+
 class Binned:
     """
     Class which calculates a binned spike train and provides methods to
@@ -199,7 +324,7 @@ class Binned:
     frame.
     I.e., a time series like [0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] is
     represented as [0, 0, 1, 3, 4, 5, 6]. The outcome is dependent on given
-    parameter such as size of bins, number of bins, start and stop point.
+    parameter such as size of bins, number of bins, start and stop points.
 
     A clipped matrix represents the binned spike train in a binary manner.
     It's rows represent the number of spike trains
@@ -211,6 +336,10 @@ class Binned:
     An unclipped matrix is calculated the same way, but its columns
     contain the number of spikes that occurred in the spike train(s). It counts
     the occurrence of the timing of a spike in its respective spike train.
+
+    Furthermore, it is possible to do basic arithmetic operations between
+    `binned` classes, mainly Addition and Subtraction.
+    Therefore, the `+`, `+=`, `-` and `-=` operators are overloaded.
 
     Parameters
     ----------
@@ -237,9 +366,10 @@ class Binned:
 
     See also
     --------
-    * from_neo()
-    * matrix_clipped()
-    * matrix_unclipped()
+    __convert_to_binned
+    filled
+    matrix_clipped
+    matrix_unclipped
 
     Notes
     -----
@@ -293,7 +423,8 @@ class Binned:
         self.__check_init_params(binsize, num_bins, self.t_start, self.t_stop)
         self.__check_consistency(spiketrains, self.binsize, self.num_bins,
                                  self.t_start, self.t_stop)
-        self.filled = []  # contains the index of the bins
+        self._sparse_mat_u = None
+        self._sparse_mat_c = None
         # Now create filled
         self.__convert_to_binned(spiketrains)
 
@@ -434,7 +565,7 @@ class Binned:
                 'some spike trains are not defined in the time given '
                 'by t_start')
         elif num_bins != int((
-            (t_stop - t_start).rescale(binsize.units) / binsize).magnitude):
+                    (t_stop - t_start).rescale(binsize.units) / binsize).magnitude):
             raise ValueError(
                 "Inconsistent arguments t_start (%s), " % t_start +
                 "t_stop (%s), binsize (%d) " % (t_stop, binsize) +
@@ -457,34 +588,6 @@ class Binned:
                 "than 1: (matrix_columns: %s, num_bins: %s). "
                 "Please check your input parameter." % (
                     self.matrix_columns, self.num_bins))
-
-    @property
-    def filled(self):
-        """
-        Returns the binned spike train.
-        Is a property.
-
-        Returns
-        -------
-        filled : numpy.array
-            Numpy array containing binned spike train.
-        """
-        return self.filled
-
-    @filled.setter
-    def filled(self, f):
-        """
-        Setter for a new binned spike train.
-
-        Sets the binned spike train array `filled` to another binned array.
-
-        Parameters
-        ----------
-        f : numpy array or list
-            Array or list which is going to replace the actual binned spike
-            train.
-        """
-        self.filled = f
 
     @property
     def edges(self):
@@ -561,13 +664,91 @@ class Binned:
         """
         return self.left_edges + self.binsize/2
 
+    @property
+    def sparse_mat_unclip(self):
+        """
+        Getter for **unclipped** version of the sparse matrix.
+
+        Returns
+        -------
+        matrix: scipy.sparse.csr_matrix
+            Sparse matrix, counted/ unclipped version.
+
+        See also
+        --------
+        scipy.sparse.csr_matrix
+        matrix_unclipped
+        """
+        if self._sparse_mat_u is not None:
+            return self._sparse_mat_u
+
+    @property
+    def sparse_mat_clip(self, store=False):
+        """
+        Getter for **clipped** version of the sparse matrix.
+
+        Parameters
+        ----------
+        store : bool
+            If the binary sparse matrix should be kept in memory.
+            Default is False
+
+        Returns
+        -------
+        matrix: scipy.sparse.csr_matrix
+            Sparse matrix, binary/ clipped version.
+
+        See also
+        --------
+        scipy.sparse.csr_matrix
+        matrix_unclipped
+        """
+        if store:
+            if self._sparse_mat_c:
+                return self._sparse_mat_c
+            else:
+                self._sparse_mat_c = self._sparse_mat_u.copy()
+                self._sparse_mat_c[self._sparse_mat_c.nonzero()] = 1
+                return self._sparse_mat_c
+        # Return sparse Matrix without storing
+        tmp_mat = self._sparse_mat_u.copy()
+        tmp_mat[tmp_mat.nonzero()] = 1
+        return tmp_mat
+
+    @property
+    def filled(self):
+        """
+        Converts unclipped version of sparse matrix to a list of lists
+        called :attr:`filled`, which contains the binned times.
+
+        Examples
+        --------
+        >>> import elephant.conversion as conv
+        >>> import neo as n
+        >>> import quantities as pq
+        >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
+        >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
+        >>> print x.filled
+        [[0, 0, 1, 3, 4, 5, 6]]
+
+        """
+        filled = []
+        for row in self.matrix_unclipped():
+            l = []
+            # Index, Element of row
+            for i, j in enumerate(row):
+                # Multiplicate index i with element j to get the respective
+                # binned times into a list
+                l.extend([i]*abs(j))
+            filled.append(l)
+        return filled
+
     def matrix_clipped(self, **kwargs):
         """
-        Calculates a matrix, which rows represent the number of spike trains
-        and the columns represent the binned
-        index position of a spike in a spike train.
-        The calculated matrix columns contain only ones, which indicate
-        a spike.
+        Returns a sparse matrix (`scipy.sparse.csr_matrix`), which rows
+        represent the number of spike trains and the columns represent the
+        binned index position of a spike in a spike train.
+        The matrix columns contain only ones, which indicate a spike.
         If **bool** `store_mat` is set to **True** last calculated `clipped`
         matrix will be returned.
 
@@ -591,62 +772,48 @@ class Binned:
         Returns
         -------
         clipped matrix : numpy.ndarray
-            Matrix with ones indicating a spike and zeros for non spike.
+            Returns a dense matrix representation of the sparse matrix,
+            with ones indicating a spike and zeros for non spike.
             The ones in the columns represent the index
             position of the spike in the spike train and rows represent the
             number of spike trains.
 
         Examples
         --------
-        >>> import jelephant.core.rep as rep
+        >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = rep.binned_st(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
+        >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
         >>> print x.matrix_clipped()
-            [[ 1.  1.  0.  1.  1.  1.  1.  0.  0.  0.]]
+        [[1 1 0 1 1 1 1 0 0 0]]
+
+        See also
+        --------
+        scipy.sparse.csr_matrix
+        scipy.sparse.csr_matrix.toarray
         """
         if 'store_mat' in kwargs:
             if not isinstance(kwargs['store_mat'], bool):
                 raise AssertionError('store_mat is not a boolean')
             self.store_mat_c = kwargs['store_mat']
         if self.mat_c is not None:
-            return self.mat_c
+            return self.sparse_mat_clip.toarray()
         # Matrix shall be stored
         if self.store_mat_c:
-            self.mat_c = np.zeros((self.matrix_rows, self.matrix_columns))
-            for elem_idx, elem in enumerate(self.filled):
-                if len(elem) != 0:
-                    try:
-                        self.mat_c[elem_idx, elem] = 1
-                    except IndexError as ie:
-                        raise IndexError(str(
-                            ie) + "\n You are trying to build a matrix which "
-                                  "is inconsistent in size. "
-                                  "Please check your input parameter.")
-                return self.mat_c
+            self.mat_c = abs(scipy.sign(self.sparse_mat_clip.toarray()))
+            return self.mat_c
         # Matrix on demand
         else:
-            tmp_mat = np.zeros(
-                (self.matrix_rows, self.matrix_columns))  # temporary matrix
-            for elem_idx, elem in enumerate(self.filled):
-                if len(elem) != 0:
-                    try:
-                        tmp_mat[elem_idx, elem] = 1
-                    except IndexError as ie:
-                        raise IndexError(str(
-                            ie) + "\n You are trying to build a matrix which "
-                                  "is inconsistent in size. "
-                                  "Please check your input parameter.")
-            return tmp_mat
+            return abs(scipy.sign(self.matrix_unclipped()))
 
     def matrix_unclipped(self, **kwargs):
         """
 
-        Calculates a matrix, which rows represents the number of spike trains
-        and the columns represents the binned index position of a spike in a
-        spike train.
-        The calculated matrix columns contain the number of spikes that
+        Returns the sparse matrix, which rows represents the number of
+        spike trains and the columns represents the binned index position
+        of a spike in a spike train.
+        The  matrix columns contain the number of spikes that
         occurred in the spike train(s).
         If **bool** `store_mat` is set to **True** last calculated `unclipped`
         matrix will be returned.
@@ -676,97 +843,68 @@ class Binned:
 
         Examples
         --------
-        >>> import jelephant.core.rep as rep
+        >>> import elephant.conversion conv
         >>> import neo as n
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = rep.binned_st(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
+        >>> x = conv.binned_st(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
         >>> print x.matrix_unclipped()
-            [[ 2.  1.  0.  1.  1.  1.  1.  0.  0.  0.]]
+        [[2 1 0 1 1 1 1 0 0 0]]
+
+        See also
+        --------
+        scipy.sparse.csr_matrix
+        scipy.sparse.csr_matrix.toarray
+
         """
         if 'store_mat' in kwargs:
             if not isinstance(kwargs['store_mat'], bool):
                 raise AssertionError('store_mat is not a boolean')
             self.store_mat_u = kwargs['store_mat']
         if self.mat_u is not None:
-            return self.mat_u
+            return self.mat_u.toarray()
         if self.store_mat_u:
-            self.mat_u = np.zeros((self.matrix_rows, self.matrix_columns))
-            for elem_idx, elem in enumerate(self.filled):
-                if len(elem) != 0:
-                    try:
-                        if len(elem) >= 1:
-                            for inner_elem in elem:
-                                self.mat_u[elem_idx, inner_elem] += 1
-                    except IndexError as ie:
-                        raise IndexError(str(ie) + "\n You are trying to "
-                                                   "build a matrix which is "
-                                                   "inconsistent in size. "
-                                                   "Please check your input "
-                                                   "parameter.")
+            self.mat_u = self.sparse_mat_unclip.toarray()
             return self.mat_u
         # Matrix on demand
         else:
-            tmp_mat = np.zeros((self.matrix_rows, self.matrix_columns))
-            for elem_idx, elem in enumerate(self.filled):
-                if len(elem) != 0:
-                    try:
-                        if len(elem) > 1:
-                            for inner_elem in elem:
-                                tmp_mat[elem_idx, inner_elem] += 1
-                        else:
-                            tmp_mat[elem_idx, elem[0]] += 1
-                    except IndexError as ie:
-                        raise IndexError(str(
-                            ie) + "\n You are trying to build a matrix which "
-                                  "is inconsistent in size. "
-                                  "Please check your input parameter.")
-            return tmp_mat
+            return self._sparse_mat_u.toarray()
 
     def __convert_to_binned(self, spiketrains):
         """
-
-        Converts neo.core.SpikeTrain objects to a list of numpy.ndarray's
-        called **filled**, which contains the binned times.
+        Converts neo.core.SpikeTrain objects to a sparse matrix
+        (`scipy.sparse.csr_matrix`), which contains the binned times.
 
         Parameters
         ----------
         spiketrains : neo.SpikeTrain object or list of SpikeTrain objects
-           The binned time array :attr:filled is calculated from a SpikeTrain
+           The binned time array :attr:`filled` is calculated from a SpikeTrain
            object or from a list of SpikeTrain objects.
-        binsize : quantities.Quantity
-            Size of bins
 
         Examples
         --------
-        >>> import jelephant.core.rep as rep
+        >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = rep.binned_st(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
-        >>> print x.filled
-            [array([0, 0, 1, 3, 4, 5, 6])]
+        >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
+        >>> print x.sparse_mat_unclip.nonzero()[1]
+        [0 1 3 4 5 6]
         """
-        for elem in spiketrains:
+        lil_mat = sps.lil_matrix((self.matrix_rows, self.matrix_columns),
+                                 dtype=int)
+        for idx, elem in enumerate(spiketrains):
             idx_filled = np.array(
                 ((elem.view(pq.Quantity) - self.t_start).rescale(
                     self.binsize.units) / self.binsize).magnitude, dtype=int)
-            self.filled.append(idx_filled[idx_filled < self.num_bins])
-
-    def prune(self):
-        """
-        Prunes the :attr:`filled` list, so that each element contains no
-        duplicated values any more
-
-        Returns
-        -------
-        self : jelephant.rep.binned_st object
-              Returns a new class with a pruned `filled` list.
-        """
-        if len(self.filled) > 1:
-            self.filled = [np.unique(elems) for elems in self.filled]
-        else:
-            self.filled = [np.unique(np.asarray(self.filled))]
-        return self
+            l = np.logical_and(idx_filled < self.num_bins,
+                               idx_filled >= self.t_start.rescale(
+                                   self.binsize.units).magnitude)
+            l = np.logical_and(l, idx_filled <= self.t_stop.rescale(
+                self.binsize.units).magnitude)
+            filled = idx_filled[l]
+            for inner_elem in filled:
+                lil_mat[idx, inner_elem] += 1
+        self._sparse_mat_u = lil_mat.tocsr()
 
     def __eq__(self, other):
         """
@@ -774,8 +912,8 @@ class Binned:
 
         Parameters
         ----------
-        other: jelephant.core.rep.binned_st
-            Another class of binned_st
+        other: elephant.conversion.Binned
+            Another class of Binned
 
         Returns
         -------
@@ -785,17 +923,18 @@ class Binned:
 
         Examples
         --------
-        >>> import jelephant.core.rep as rep
+        >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> b = n.SpikeTrain([0.1, 0.7, 1.2, 2.2, 4.3, 5.5, 8.0] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = rep.binned_st(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
-        >>> y = rep.binned_st(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> x = conv.Binned(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> y = conv.Binned(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> print (x == y)
-            False
+        True
         """
-        return np.array_equal(self.filled, other.filled)
+        return np.array_equal(self.sparse_mat_unclip.data,
+                              other.sparse_mat_unclip.data)
 
     def __add__(self, other):
         """
@@ -803,26 +942,26 @@ class Binned:
 
         Parameters
         ----------
-        other: jelephant.core.rep.binned_st
+        other: elephant.conversion.Binned object
             Another class of binned_st
 
         Returns
         -------
-        obj : jelephant.core.rep.binned_st object
+        obj : elephant.conversion.Binned object
             Summed joint object of `self` and `other`
 
         Examples
         --------
-        >>> import jelephant.core.rep as rep
+        >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> b = n.SpikeTrain([0.1, 0.7, 1.2, 2.2, 4.3, 5.5, 8.0] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = rep.binned_st(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
-        >>> y = rep.binned_st(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> x = conv.Binned(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> y = conv.Binned(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> z = x + y
-        >>> print z.filled
-            [[0 0 1 3 4 5 6 0 0 1 2 4 5 8 0 0 1 2 4 5 8]]
+        >>> print z.sparse_mat_unclip.nonzero()[1]
+        [0 1 2 3 4 5 6 8]
 
         Notes
         -----
@@ -832,13 +971,8 @@ class Binned:
         """
         new_class = self.create_class(self.t_start, self.t_stop, self.binsize,
                                       self.matrix_rows, self.matrix_columns)
-        # filled is the important structure to change
-        # For merged spiketrains, or when filled has more than one binned
-        # spiketrain
-        if len(self.filled) > 1 or len(other.filled) > 1:
-            new_class.filled = [self.filled, other.filled]
-        else:
-            new_class.filled = np.hstack((self.filled, other.filled))
+        new_class._sparse_mat_u = \
+            self.sparse_mat_unclip + other.sparse_mat_unclip
         return new_class
 
     def __iadd__(self, other):
@@ -847,22 +981,24 @@ class Binned:
 
         Returns
         -------
-        obj : jelephant.core.rep.binned_st object
+        obj : elephant.conversion.Binned object
             Summed joint object of `self` and `other`
 
 
         Examples
         --------
-        >>> import jelephant.core.rep as rep
+        >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> b = n.SpikeTrain([0.1, 0.7, 1.2, 2.2, 4.3, 5.5, 8.0] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = rep.binned_st(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
-        >>> y = rep.binned_st(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> x = conv.Binned(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> y = conv.Binned(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> x += y
-        >>> print x.filled
-            [[0, 0, 1, 3, 4, 5, 6, 0, 0, 1, 2, 4, 5, 8]]
+        >>> print x.matrix_unclipped()
+        [[4 2 1 1 2 2 1 0 1 0]]
+        >>> print x.sparse_mat_unclip.nonzero()[1]
+        [0 1 2 3 4 5 6 8]
 
         Notes
         -----
@@ -887,21 +1023,22 @@ class Binned:
 
         Returns
         -------
-        obj : jelephant.core.rep.binned_st object
+        obj : elephant.conversion.Binned object
            Subtracted joint object of `self` and `other`
 
         Examples
         --------
-        >>> import jelephant.core.rep as rep
+        >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> b = n.SpikeTrain([0.1, 0.7, 1.2, 2.2, 4.3, 5.5, 8.0] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = rep.binned_st(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
-        >>> y = rep.binned_st(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> x = conv.binned_st(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> y = conv.binned_st(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> z = x - y
-        >>> print z.filled
-            [[2, 3, 6, 8]]
+        >>> print z.sparse_mat_unclip.nonzero()[1]
+        [2 3 6 8]
+
 
         Notes
         -----
@@ -910,8 +1047,6 @@ class Binned:
         The input SpikeTrain is altered!
 
         """
-        import itertools
-
         new_class = self.new_class = self.create_class(self.t_start,
                                                        self.t_stop,
                                                        self.binsize,
@@ -921,14 +1056,8 @@ class Binned:
         # and other.
         new_class.matrix_columns = self.matrix_columns
         new_class.matrix_rows = self.matrix_rows
-        if len(self.filled) > 1 or len(other.filled) > 1:
-            for s, o in itertools.izip(self.filled, other.filled):
-                new_class.filled.append(np.array(list(set(s) ^ set(o))))
-        else:
-            new_class.filled.append(
-                np.setxor1d(self.filled[0], other.filled[0]))
-            if not len(new_class.filled[0] > 0):
-                new_class.filled[0] = np.zeros(len(self.filled[0]))
+        new_class._sparse_mat_u = \
+            self.sparse_mat_unclip - other.sparse_mat_unclip
         return new_class
 
     def __isub__(self, other):
@@ -937,22 +1066,23 @@ class Binned:
 
         Returns
         -------
-        obj : jelephant.core.rep.binned_st object
+        obj : elephant.conversion.Binned object
             Subtracted joint object of `self` and `other`
 
 
         Examples
         --------
-        >>> import jelephant.core.rep as rep
+        >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> b = n.SpikeTrain([0.1, 0.7, 1.2, 2.2, 4.3, 5.5, 8.0] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = rep.binned_st(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
-        >>> y = rep.binned_st(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> x = conv.Binned(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> y = conv.Binned(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> x -= y
-        >>> print x.filled
-            [[2, 3, 6, 8]]
+        >>> print x.sparse_mat_unclip.nonzero()[1]
+        [2 3 6 8]
+
 
         Notes
         -----
@@ -975,11 +1105,14 @@ class Binned:
         spk = neo.core.SpikeTrain([] * pq.s, t_stop=stop)
         # Create a new dummy class to return
         new_class = cls(spk, t_start=start, t_stop=stop, binsize=binsize)
-        # Clear the filed list, which is created when creating an instance
-        del new_class.filled[:]
+        # Clear the matrices, which are created when creating an instance or
+        # were stored before
+        new_class.mat_u = None
+        new_class.mat_c = None
+        del new_class._sparse_mat_c
+        del new_class._sparse_mat_u
         # The cols and rows has to be equal to the rows and cols of self
         # and other.
         new_class.matrix_rows = mat_row
         new_class.matrix_col = mat_col
         return new_class
-
