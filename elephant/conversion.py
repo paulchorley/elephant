@@ -728,7 +728,7 @@ class Binned:
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
-        >>> print x.filled
+        >>> print(x.filled)
         [[0, 0, 1, 3, 4, 5, 6]]
 
         """
@@ -785,7 +785,7 @@ class Binned:
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
-        >>> print x.matrix_clipped()
+        >>> print(x.matrix_clipped())
         [[1 1 0 1 1 1 1 0 0 0]]
 
         See also
@@ -843,11 +843,11 @@ class Binned:
 
         Examples
         --------
-        >>> import elephant.conversion conv
+        >>> import elephant.conversion as conv
         >>> import neo as n
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = conv.binned_st(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
-        >>> print x.matrix_unclipped()
+        >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
+        >>> print(x.matrix_unclipped())
         [[2 1 0 1 1 1 1 0 0 0]]
 
         See also
@@ -887,7 +887,7 @@ class Binned:
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
-        >>> print x.sparse_mat_unclip.nonzero()[1]
+        >>> print(x.sparse_mat_unclip.nonzero()[1])
         [0 1 3 4 5 6]
         """
         lil_mat = sps.lil_matrix((self.matrix_rows, self.matrix_columns),
@@ -960,7 +960,7 @@ class Binned:
         >>> x = conv.Binned(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> y = conv.Binned(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> z = x + y
-        >>> print z.sparse_mat_unclip.nonzero()[1]
+        >>> print(z.sparse_mat_unclip.nonzero()[1])
         [0 1 2 3 4 5 6 8]
 
         Notes
@@ -995,9 +995,9 @@ class Binned:
         >>> x = conv.Binned(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> y = conv.Binned(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> x += y
-        >>> print x.matrix_unclipped()
+        >>> print(x.matrix_unclipped())
         [[4 2 1 1 2 2 1 0 1 0]]
-        >>> print x.sparse_mat_unclip.nonzero()[1]
+        >>> print(x.sparse_mat_unclip.nonzero()[1])
         [0 1 2 3 4 5 6 8]
 
         Notes
@@ -1033,10 +1033,10 @@ class Binned:
         >>> import quantities as pq
         >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> b = n.SpikeTrain([0.1, 0.7, 1.2, 2.2, 4.3, 5.5, 8.0] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = conv.binned_st(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
-        >>> y = conv.binned_st(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> x = conv.Binned(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
+        >>> y = conv.Binned(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> z = x - y
-        >>> print z.sparse_mat_unclip.nonzero()[1]
+        >>> print(z.sparse_mat_unclip.nonzero()[1])
         [2 3 6 8]
 
 
@@ -1080,7 +1080,7 @@ class Binned:
         >>> x = conv.Binned(a, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> y = conv.Binned(b, binsize=pq.s, t_start=0 * pq.s, t_stop=10. * pq.s)
         >>> x -= y
-        >>> print x.sparse_mat_unclip.nonzero()[1]
+        >>> print(x.sparse_mat_unclip.nonzero()[1])
         [2 3 6 8]
 
 
