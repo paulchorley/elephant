@@ -245,7 +245,7 @@ class BinnedTestCase(unittest.TestCase):
         nbins = 16
         x = conv.Binned(a, num_bins=nbins, binsize=binsize,
                         t_start=-6.5 * pq.s)
-        y = [np.array([1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0])]
+        y = [np.array([1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0])]
         self.assertTrue(np.array_equal(x.matrix_clipped(), y))
 
     def test_binned_neg_times_list(self):
@@ -324,7 +324,7 @@ class BinnedTestCase(unittest.TestCase):
         b = self.spiketrain_b
         c = [a, b]
         binsize = 1 * pq.s
-        x_unclipped = conv.Binned(c, binbinned_size=binsize, t_start=0 * pq.s,
+        x_unclipped = conv.Binned(c, binsize=binsize, t_start=0 * pq.s,
                                   t_stop=10. * pq.s)
         x_clipped = conv.Binned(c, binsize=binsize, t_start=0 * pq.s,
                                 t_stop=10. * pq.s)

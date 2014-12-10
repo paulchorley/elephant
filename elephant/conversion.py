@@ -893,15 +893,13 @@ class Binned:
         lil_mat = sps.lil_matrix((self.matrix_rows, self.matrix_columns),
                                  dtype=int)
         for idx, elem in enumerate(spiketrains):
-            idx_filled = np.array(
-                ((elem.view(pq.Quantity) - self.t_start).rescale(
-                    self.binsize.units) / self.binsize).magnitude, dtype=int)
-            l = np.logical_and(idx_filled < self.num_bins,
-                               idx_filled >= self.t_start.rescale(
-                                   self.binsize.units).magnitude)
-            l = np.logical_and(l, idx_filled <= self.t_stop.rescale(
-                self.binsize.units).magnitude)
-            filled = idx_filled[l]
+            ev = elem.view(pq.Quantity)
+            scale = np.array(((ev - self.t_start).rescale(
+                self.binsize.units) / self.binsize).magnitude, dtype=int)
+            l = np.logical_and(ev >= self.t_start.rescale(self.binsize.units),
+                               ev <= self.t_stop.rescale(self.binsize.units))
+            filled = scale[l]
+            filled = filled[filled < self.num_bins]
             for inner_elem in filled:
                 lil_mat[idx, inner_elem] += 1
         self._sparse_mat_u = lil_mat.tocsr()
