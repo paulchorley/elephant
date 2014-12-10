@@ -108,7 +108,7 @@ def binarize(spiketrain, sampling_rate=None, t_start=None, t_stop=None,
         t_stop = getattr(spiketrain, 't_stop', np.max(spiketrain))
 
     # we don't actually want the sampling rate, we want the sampling period
-    sampling_period = 1./sampling_rate
+    sampling_period = 1. / sampling_rate
 
     # figure out what units, if any, we are dealing with
     if hasattr(spiketrain, 'units'):
@@ -135,7 +135,7 @@ def binarize(spiketrain, sampling_rate=None, t_start=None, t_stop=None,
         t_stop = t_stop.rescale(units).magnitude
 
     # figure out the bin edges
-    edges = np.arange(t_start-sampling_period/2, t_stop+sampling_period*3/2,
+    edges = np.arange(t_start - sampling_period / 2, t_stop + sampling_period * 3 / 2,
                       sampling_period)
     # we don't want to count any spikes before t_start or after t_stop
     if edges[-2] > t_stop:
@@ -152,9 +152,9 @@ def binarize(spiketrain, sampling_rate=None, t_start=None, t_stop=None,
     if not return_times:
         return res
     elif units is None:
-        return res, np.arange(t_start, t_stop+sampling_period, sampling_period)
+        return res, np.arange(t_start, t_stop + sampling_period, sampling_period)
     else:
-        return res, pq.Quantity(np.arange(t_start, t_stop+sampling_period,
+        return res, pq.Quantity(np.arange(t_start, t_stop + sampling_period,
                                           sampling_period), units=units)
 
 
@@ -367,7 +367,7 @@ class Binned:
     See also
     --------
     __convert_to_binned
-    filled
+    spike_indices
     matrix_clipped
     matrix_unclipped
 
@@ -425,7 +425,7 @@ class Binned:
                                  self.t_start, self.t_stop)
         self._sparse_mat_u = None
         self._sparse_mat_c = None
-        # Now create filled
+        # Now create spike_indices
         self.__convert_to_binned(spiketrains)
 
     # =========================================================================
@@ -662,7 +662,7 @@ class Binned:
             All center edges in interval (start, stop) are returned as
             a quantity array.
         """
-        return self.left_edges + self.binsize/2
+        return self.left_edges + self.binsize / 2
 
     @property
     def sparse_mat_unclip(self):
@@ -716,32 +716,39 @@ class Binned:
         return tmp_mat
 
     @property
-    def filled(self):
+    def spike_indices(self):
         """
-        Converts unclipped version of sparse matrix to a list of lists
-        called :attr:`filled`, which contains the binned times.
+        A list of lists for each spike train (i.e., rows of the binned matrix),
+        that in turn contains for each spike the index into the binned matrix
+        where this spike enters.
+
+        In contrast to sparse_mat_unclip.nonzero(), this function will report
+        two spikes falling in the same bin as two entries.
 
         Examples
         --------
         >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
-        >>> a = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
+        >>> st = n.SpikeTrain(
+                [0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
         >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
-        >>> print(x.filled)
+        >>> print(x.spike_indices)
         [[0, 0, 1, 3, 4, 5, 6]]
+        >>> print(x.sparse_mat_unclip.nonzero()[1])
+        [0, 1, 3, 4, 5, 6]
 
         """
-        filled = []
-        for row in self.matrix_unclipped():
+        spike_idx = []
+        for row in self._sparse_mat_u:
             l = []
-            # Index, Element of row
-            for i, j in enumerate(row):
-                # Multiplicate index i with element j to get the respective
-                # binned times into a list
-                l.extend([i]*abs(j))
-            filled.append(l)
-        return filled
+            # Extract each non-zeros column index and how often it exists,
+            # i.e., how many spikes fall in this column
+            for col, count in zip(row.nonzero()[1], row.data):
+                # Append the column index for each spike
+                l.extend([col] * count)
+            spike_idx.append(l)
+        return spike_idx
 
     def matrix_clipped(self, **kwargs):
         """
@@ -877,7 +884,7 @@ class Binned:
         Parameters
         ----------
         spiketrains : neo.SpikeTrain object or list of SpikeTrain objects
-           The binned time array :attr:`filled` is calculated from a SpikeTrain
+           The binned time array :attr:`spike_indices` is calculated from a SpikeTrain
            object or from a list of SpikeTrain objects.
 
         Examples

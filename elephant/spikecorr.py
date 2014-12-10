@@ -83,10 +83,15 @@ def corrcoef(sts, bin_size):
             #                      =:   ij   + m_i*m_j - N_i * mj - N_j * m_i$$
             # where N_i is the spike count of spike train $i$ and
             # $\bar{m_i}$ is a vector $\bar{m_i}*\bar{1}$.
-            ij = 0
-            for k in sts[i].magnitude:
-                d = np.abs(sts[j].magnitude - k)
-                ij += np.count_nonzero(d < bin_size)
+
+            ij = np.count_nonzero(
+                np.abs(
+                    sts[i].magnitude.reshape((-1, 1)) -
+                    sts[j].magnitude.reshape((1, -1))) < bin_size)
+#             ij = 0
+#             for k in sts[i].magnitude:
+#                 d = np.abs(sts[j].magnitude - k)
+#                 ij += np.count_nonzero(d < bin_size)
 
             # Number of spikes in i and j
             n_i = len(sts[i])
@@ -101,14 +106,15 @@ def corrcoef(sts, bin_size):
             # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
             #                      =:   ii   + \bar{m_i}^2 - 2 N_i * mi$$
             #
-            ii = 0
-            for k in sts[i].magnitude:
-                d = np.abs(sts[i].magnitude - k)
-                ii += np.count_nonzero(d < bin_size)
-            jj = 0
-            for k in sts[j].magnitude:
-                d = np.abs(sts[j].magnitude - k)
-                jj += np.count_nonzero(d < bin_size)
+            ii = np.count_nonzero(
+                np.abs(
+                    sts[i].magnitude.reshape((-1, 1)) -
+                    sts[i].magnitude.reshape((1, -1))) < bin_size)
+            jj = np.count_nonzero(
+                np.abs(
+                    sts[j].magnitude.reshape((-1, 1)) -
+                    sts[j].magnitude.reshape((1, -1))) < bin_size)
+
             cc_denom = np.sqrt(
                 (ii + num_bins * (m_i ** 2) -
                     2 * m_i * n_i) *
@@ -177,11 +183,13 @@ def corrcoef_binned(binned_sts, clip=False):
     # Pre-allocate correlation matrix
     C = np.zeros((num_neuron, num_neuron))
 
+    spike_indices = binned_sts.spike_indices
+
     for i in range(num_neuron):
         for j in range(i, num_neuron):
             # Get positions (bin IDs) of non-zero entries
-            bins_i = binned_sts.filled[i]
-            bins_j = binned_sts.filled[j]
+            bins_i = spike_indices[i]
+            bins_j = spike_indices[j]
 
             # Find unique bin IDs and corresponding spike counts per bin
             bins_unique_i, bins_unique_counts_i = np.unique(
@@ -243,7 +251,7 @@ def corrcoef_binned(binned_sts, clip=False):
             C[i, j] = C[j, i] = cc_enum / cc_denom
     return C
 
-    # ---- Alternate version: does not work since spase matrix has no
+    # ---- Alternate version: does not work since sparse matrix has no
     #      addition of scalars implemented --> workaround possible?
     if clip:
         mat = scipy.sparse.csr_matrix(binned_sts.matrix_clipped())
@@ -334,7 +342,7 @@ def cchb(
 
     """
     if isinstance(x, rep.Binned):
-        x_filled = x.filled[0]  # Take the indices of the filled bins in x
+        x_filled = x.spike_indices[0]  # Take the indices of the spike_indices bins in x
         x_mat = x.matrix_clipped()[0] if clip else  x.matrix_unclipped()[0]
         x_filled_howmany = x_mat[x_filled]
         del(x_mat)  # Delete big unnecessary object
@@ -348,7 +356,7 @@ def cchb(
         x_filled_howmany = x[x_filled]
 
     if isinstance(y, rep.Binned):
-        y_filled = y.filled[0]  # Take the indices of the filled bins in y
+        y_filled = y.spike_indices[0]  # Take the indices of the spike_indices bins in y
         y_mat = y.matrix_clipped()[0] if clip else  y.matrix_unclipped()[0]
         y_filled_howmany = y_mat[y_filled]
         del(y_mat)  # Delete big unnecessary object
@@ -361,15 +369,15 @@ def cchb(
         y_filled = np.where(y > 0)[0]
         y_filled_howmany = y[y_filled]
 
-    # Take the indices of the filled bins in x and y
-    x_filled = x.filled[0]
-    y_filled = y.filled[0]
+    # Take the indices of the spike_indices bins in x and y
+    x_filled = x.spike_indices[0]
+    y_filled = y.spike_indices[0]
 
     # Compute the binned spike trains
     x_mat = x.matrix_clipped()[0]
     y_mat = y.matrix_clipped()[0]
 
-    # Select the filled bins of x and y into a smaller array
+    # Select the spike_indices bins of x and y into a smaller array
     x_filled_howmany = x_mat[x_filled]
     y_filled_howmany = y_mat[y_filled]
 

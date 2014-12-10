@@ -79,7 +79,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         self.assertEqual(len(res_unclipped), 2)
 
         # Check result unclipped against result calculated from scratch for
-        # the off-diagonal elemant
+        # the off-diagonal element
         mat = self.binned_st.matrix_unclipped()
         mean_0 = np.mean(mat[0])
         mean_1 = np.mean(mat[1])

@@ -18,7 +18,7 @@ import elephant.conversion as conv
 
 
 def get_nearest(times, time):
-    return (np.abs(times-time)).argmin()
+    return (np.abs(times - time)).argmin()
 
 
 class binarize_TestCase(unittest.TestCase):
@@ -28,7 +28,7 @@ class binarize_TestCase(unittest.TestCase):
     def test_binarize_with_spiketrain_exact(self):
         st = neo.SpikeTrain(self.test_array_1d, units='ms',
                             t_stop=10.0, sampling_rate=100)
-        times = np.arange(0, 10.+.01, .01)
+        times = np.arange(0, 10. + .01, .01)
         target = np.zeros_like(times).astype('bool')
         for time in self.test_array_1d:
             target[get_nearest(times, time)] = True
@@ -41,7 +41,7 @@ class binarize_TestCase(unittest.TestCase):
     def test_binarize_with_spiketrain_exact_set_ends(self):
         st = neo.SpikeTrain(self.test_array_1d, units='ms',
                             t_stop=10.0, sampling_rate=100)
-        times = np.arange(5., 10.+.01, .01)
+        times = np.arange(5., 10. + .01, .01)
         target = np.zeros_like(times).astype('bool')
         times = pq.Quantity(times, units='ms')
 
@@ -52,7 +52,7 @@ class binarize_TestCase(unittest.TestCase):
     def test_binarize_with_spiketrain_round(self):
         st = neo.SpikeTrain(self.test_array_1d, units='ms',
                             t_stop=10.0, sampling_rate=10.0)
-        times = np.arange(0, 10.+.1, .1)
+        times = np.arange(0, 10. + .1, .1)
         target = np.zeros_like(times).astype('bool')
         for time in np.round(self.test_array_1d, 1):
             target[get_nearest(times, time)] = True
@@ -64,7 +64,7 @@ class binarize_TestCase(unittest.TestCase):
 
     def test_binarize_with_quantities_exact(self):
         st = pq.Quantity(self.test_array_1d, units='ms')
-        times = np.arange(0, 1.23+.01, .01)
+        times = np.arange(0, 1.23 + .01, .01)
         target = np.zeros_like(times).astype('bool')
         for time in self.test_array_1d:
             target[get_nearest(times, time)] = True
@@ -77,7 +77,7 @@ class binarize_TestCase(unittest.TestCase):
 
     def test_binarize_with_quantities_exact_set_ends(self):
         st = pq.Quantity(self.test_array_1d, units='ms')
-        times = np.arange(0, 10.+.01, .01)
+        times = np.arange(0, 10. + .01, .01)
         target = np.zeros_like(times).astype('bool')
         for time in self.test_array_1d:
             target[get_nearest(times, time)] = True
@@ -90,7 +90,7 @@ class binarize_TestCase(unittest.TestCase):
 
     def test_binarize_with_quantities_round_set_ends(self):
         st = pq.Quantity(self.test_array_1d, units='ms')
-        times = np.arange(5., 10.+.1, .1)
+        times = np.arange(5., 10. + .1, .1)
         target = np.zeros_like(times).astype('bool')
         times = pq.Quantity(times, units='ms')
 
@@ -101,7 +101,7 @@ class binarize_TestCase(unittest.TestCase):
 
     def test_binarize_with_plain_array_exact(self):
         st = self.test_array_1d
-        times = np.arange(0, 1.23+.01, .01)
+        times = np.arange(0, 1.23 + .01, .01)
         target = np.zeros_like(times).astype('bool')
         for time in self.test_array_1d:
             target[get_nearest(times, time)] = True
@@ -112,7 +112,7 @@ class binarize_TestCase(unittest.TestCase):
 
     def test_binarize_with_plain_array_exact_set_ends(self):
         st = self.test_array_1d
-        times = np.arange(0, 10.+.01, .01)
+        times = np.arange(0, 10. + .01, .01)
         target = np.zeros_like(times).astype('bool')
         for time in self.test_array_1d:
             target[get_nearest(times, time)] = True
@@ -123,7 +123,7 @@ class binarize_TestCase(unittest.TestCase):
 
     def test_binarize_no_time(self):
         st = self.test_array_1d
-        times = np.arange(0, 1.23+.01, .01)
+        times = np.arange(0, 1.23 + .01, .01)
         target = np.zeros_like(times).astype('bool')
         for time in self.test_array_1d:
             target[get_nearest(times, time)] = True
@@ -198,7 +198,7 @@ class BinnedTestCase(unittest.TestCase):
         x_sparse = [2, 1, 2, 1]
         s = x.sparse_mat_unclip
         self.assertTrue(np.array_equal(s.data, x_sparse))
-        self.assertTrue(np.array_equal(x.filled, [[1, 1, 4], [1, 1, 4]]))
+        self.assertTrue(np.array_equal(x.spike_indices, [[1, 1, 4], [1, 1, 4]]))
 
     def test_binned_shape(self):
         a = self.spiketrain_a
@@ -262,7 +262,7 @@ class BinnedTestCase(unittest.TestCase):
 
         self.assertTrue(np.array_equal(x_clipped.matrix_clipped(), y_clipped))
 
-    # checking filled(f) and matrix(m) for 1 spiketrain with clip(c) and
+    # checking spike_indices(f) and matrix(m) for 1 spiketrain with clip(c) and
     # without clip(u)
     def test_binned_fmcu(self):
         a = self.spiketrain_a
