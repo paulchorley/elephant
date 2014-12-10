@@ -19,6 +19,8 @@ import elephant.spikecorr as sc
 
 class corrcoeff_TestCase(unittest.TestCase):
     def setUp(self):
+        # These two arrays must be such that they do not have coincidences
+        # spanning across two neighbor bins assuming ms bins [0,1),[1,2),...
         self.test_array_1d_0 = [1.3, 7.56, 15.87, 28.23]
         self.test_array_1d_1 = [1.02, 2.71, 18.82, 28.46, 28.79]
 
@@ -33,7 +35,7 @@ class corrcoeff_TestCase(unittest.TestCase):
             [self.st_0, self.st_1], t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
 
-    def test_corrcoeff(self):
+    def test_corrcoef(self):
         '''
         Test result of a correlation coefficient between two spike trains.
         '''
@@ -62,7 +64,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         self.assertAlmostEqual(res[0][1], target_from_scratch)
         self.assertAlmostEqual(res[1][0], target_from_scratch)
 
-    def test_corrcoeff_binned(self):
+    def test_corrcoef_binned(self):
         '''
         Test result of a correlation coefficient between two binned spike
         trains.
@@ -114,7 +116,24 @@ class corrcoeff_TestCase(unittest.TestCase):
         self.assertAlmostEqual(res_clipped[0][1], target_from_scratch)
         self.assertAlmostEqual(res_clipped[1][0], target_from_scratch)
 
-    def test_corrcoeff_same_spiketrains(self):
+    def test_corrcoef_nonbinned_binned(self):
+        '''
+        Test if the binned and non-binned corrcoef functions return the same
+        thing in the case that there are no coincidences that across bin
+        borders.
+        '''
+        # Calculate non-binned and binned corrcoef
+        res_nonbinned = sc.corrcoef([self.st_0, self.st_1], bin_size=1 * pq.ms)
+        res_binned = sc.corrcoef_binned(
+            self.binned_st, clip=False)
+
+        # Check dimensions
+        self.assertEqual(len(res_nonbinned), 2)
+        self.assertEqual(len(res_binned), 2)
+
+        assert_array_equal(res_binned, res_nonbinned)
+
+    def test_corrcoef_same_spiketrains(self):
         '''
         Test if the correlation coefficient between two identical spike
         trains evaluates to a 2x2 matrix of ones.
@@ -127,7 +146,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         # Check result
         assert_array_equal(target, 1.0)
 
-    def test_corrcoeff_binned_same_spiketrains(self):
+    def test_corrcoef_binned_same_spiketrains(self):
         '''
         Test if the correlation coefficient between two identical binned spike
         trains evaluates to a 2x2 matrix of ones.
@@ -143,7 +162,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         # Check result
         assert_array_equal(target, 1.0)
 
-    def test_corrcoeff__short_input(self):
+    def test_corrcoef__short_input(self):
         '''
         Test if input list of one SpikeTrain object yields 1.0.
         '''
@@ -155,7 +174,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         # Check result
         self.assertEqual(target, 1.)
 
-    def test_corrcoeff__binned_short_input(self):
+    def test_corrcoef__binned_short_input(self):
         '''
         Test if input list of one binned spike train yields 1.0.
         '''
