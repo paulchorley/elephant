@@ -254,10 +254,11 @@ def peth(sts, w, t_start=None, t_stop=None, output='counts', clip=False):
     bs = conv.Binned(sts_cut, t_start=t_start, t_stop=t_stop, binsize=w)
 
     if clip is True:
-        bin_hist = np.sum(bs.matrix_clipped(), axis=0)
+        bin_hist = bs.sparse_mat_clip.sum(axis=0)
     else:
-        bin_hist = np.sum(bs.matrix_unclipped(), axis=0)
-
+        bin_hist = bs.sparse_mat_unclip.sum(axis=0)
+        
+    bin_hist = bin_hist.getA1()
     # Renormalise the histogram
     if output == 'counts':
         # Raw
