@@ -91,10 +91,6 @@ def corrcoef(sts, bin_size):
 
                 ij = np.count_nonzero(np.abs(np.subtract.outer(
                     sts_i, sts_j)) < bin_size.magnitude)
-    #             ij = 0
-    #             for k in sts[i].magnitude:
-    #                 d = np.abs(sts[j].magnitude - k)
-    #                 ij += np.count_nonzero(d < bin_size)
 
                 # Number of spikes in i and j
                 n_i = len(sts_i)
@@ -181,19 +177,24 @@ def corrcoef_binned(binned_sts, clip=False):
     # Pre-allocate correlation matrix
     C = np.zeros((num_neurons, num_neurons))
 
+    # Retrieve unclipped matrix
     spmat = binned_sts.sparse_mat_unclip
+
+    # For each row, extract the nonzero column indices and the corresponding
+    # data in the matrix (for performance reasons
+    bins_unique = []
+    bins_unique_counts = []
+    for s in spmat:
+        bins_unique.append(s.nonzero()[1])
+        bins_unique_counts.append(s.data)
 
     for i in range(num_neurons):
         for j in range(i, num_neurons):
             # Find unique bin IDs and corresponding spike counts per bin
-            bins_unique_i = spmat[i][:].nonzero()[1]
-            bins_unique_counts_i = spmat[i][:].data
-            bins_unique_j = spmat[j][:].nonzero()[1]
-            bins_unique_counts_j = spmat[j][:].data
-
-            # Intersect indices to identify coincident spikes
-            inters_unique = np.intersect1d(
-                bins_unique_i, bins_unique_j, assume_unique=True)
+            bins_unique_i = bins_unique[i]
+            bins_unique_counts_i = bins_unique_counts[i]
+            bins_unique_j = bins_unique[j]
+            bins_unique_counts_j = bins_unique_counts[j]
 
             # Number of spikes in i and j
             if clip:
@@ -203,38 +204,46 @@ def corrcoef_binned(binned_sts, clip=False):
                 n_i = np.sum(bins_unique_counts_i)
                 n_j = np.sum(bins_unique_counts_j)
 
-            # Enumerator:
-            # $$<b_i-m_i, b_j-m_j> = b_i*b_j + m_i*m_j
-            #                        - b_i * \bar{mj} - b_j * \bar{m_i}
-            #                      =:   ij   + m_i*m_j - N_i * mj - N_j * m_i$$
-            # where N_i is the spike count of spike train $i$ and
-            # $\bar{m_i}$ is a vector $\bar{m_i}*\bar{1}$.
-            if clip:
-                ij = len(inters_unique)
-            else:
-                ij = 0.
-                for k in inters_unique:
-                    ij += \
-                        bins_unique_counts_i[
-                            np.where(bins_unique_i == k)][0] * \
-                        bins_unique_counts_j[
-                            np.where(bins_unique_j == k)][0]
-
+            # Mean rates in i and j
             m_i = n_i / binned_sts.num_bins
             m_j = n_j / binned_sts.num_bins
+
+            # Enumerator:
+            # $$ <b_i-m_i, b_j-m_j>
+            #      = <b_i, b_j> + l*m_i*m_j - <b_i, M_j> - <b_j, M_i>
+            #      =:    ij     + l*m_i*m_j - n_i * m_j  - n_j * m_i     $$
+            # where $n_i$ is the spike count of spike train $i$,
+            # $l$ is the number of bins used (i.e., length of $b_i$ or $b_j$),
+            # and $M_i$ is a vector [m_i, m_i,..., m_i].
+            if clip:
+                # Intersect indices to identify number of coincident spikes in
+                # i and j (more efficient than directly using the dot product)
+                ij = len(np.intersect1d(
+                    bins_unique_i, bins_unique_j, assume_unique=True))
+            else:
+                # Calculate dot product b_i*b_j between unclipped matrices
+                ij = spmat[i].dot(spmat[j].transpose()).toarray()[0][0]
+
             cc_enum = ij + binned_sts.num_bins * m_i * m_j - \
                 m_i * n_j - m_j * n_i
 
             # Denominator:
-            # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
-            #                      =:   ii   + \bar{m_i}^2 - 2 N_i * mi$$
+            # $$ <b_i-m_i, b_i-m_i>
+            #       = <b_i, b_i> + m_i^2 - 2 <b_i, M_i>
+            #       =:    ii     + m_i^2 - 2 n_i * m_i   $$
             #
             if clip:
+                # Here, b_i*b_i is just the number of filled bins (since each
+                # filled bin of a clipped spike train has value equal to 1)
                 ii = len(bins_unique_i)
                 jj = len(bins_unique_j)
             else:
+                # directly calculate the dot product based on the counts of all
+                # filled entries (more efficient than using the dot product of
+                # the rows of the sparse matrix)
                 ii = np.dot(bins_unique_counts_i, bins_unique_counts_i)
                 jj = np.dot(bins_unique_counts_j, bins_unique_counts_j)
+
             cc_denom = np.sqrt(
                 (ii + binned_sts.num_bins * (m_i ** 2) -
                     2 * m_i * n_i) *
