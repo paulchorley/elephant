@@ -69,60 +69,59 @@ def corrcoef(sts, bin_size):
         raise ValueError(
             "All spike trains must have common t_start and t_stop.")
 
-    num_bins = np.ceil((t_stop - t_start) / bin_size).magnitude
+    num_bins = np.ceil(
+        (t_stop.rescale(bin_size.units) - t_start.rescale(bin_size.units)) /
+        bin_size).magnitude
     num_neuron = len(sts)
 
     # Pre-allocate correlation matrix
     C = np.zeros((num_neuron, num_neuron))
 
-    for i in range(num_neuron):
-        for j in range(i, num_neuron):
-            # Enumerator:
-            # $$<b_i-m_i, b_j-m_j> = b_i*b_j + m_i*m_j
-            #                        - b_i * \bar{mj} - b_j * \bar{m_i}
-            #                      =:   ij   + m_i*m_j - N_i * mj - N_j * m_i$$
-            # where N_i is the spike count of spike train $i$ and
-            # $\bar{m_i}$ is a vector $\bar{m_i}*\bar{1}$.
+    sts_rescale = [st.rescale(bin_size.units).magnitude for st in sts]
+    for i, sts_i in enumerate(sts_rescale):
+        for j, sts_j in enumerate(sts_rescale):
+            # Calculate only half the correlation coefficient matrix
+            if j >= i:
+                # Enumerator:
+                # $$<b_i-m_i, b_j-m_j> = b_i*b_j + m_i*m_j
+                #                        - b_i * \bar{mj} - b_j * \bar{m_i}
+                #                      =:   ij   + m_i*m_j - N_i * mj - N_j * m_i$$
+                # where N_i is the spike count of spike train $i$ and
+                # $\bar{m_i}$ is a vector $\bar{m_i}*\bar{1}$.
 
-            ij = np.count_nonzero(
-                np.abs(
-                    sts[i].magnitude.reshape((-1, 1)) -
-                    sts[j].magnitude.reshape((1, -1))) < bin_size)
-#             ij = 0
-#             for k in sts[i].magnitude:
-#                 d = np.abs(sts[j].magnitude - k)
-#                 ij += np.count_nonzero(d < bin_size)
+                ij = np.count_nonzero(np.abs(np.subtract.outer(
+                    sts_i, sts_j)) < bin_size.magnitude)
+    #             ij = 0
+    #             for k in sts[i].magnitude:
+    #                 d = np.abs(sts[j].magnitude - k)
+    #                 ij += np.count_nonzero(d < bin_size)
 
-            # Number of spikes in i and j
-            n_i = len(sts[i])
-            n_j = len(sts[j])
+                # Number of spikes in i and j
+                n_i = len(sts_i)
+                n_j = len(sts_j)
 
-            m_i = n_i / num_bins
-            m_j = n_j / num_bins
-            cc_enum = ij + num_bins * m_i * m_j - \
-                m_i * n_j - m_j * n_i
+                m_i = n_i / num_bins
+                m_j = n_j / num_bins
+                cc_enum = ij + num_bins * m_i * m_j - \
+                    m_i * n_j - m_j * n_i
 
-            # Denominator:
-            # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
-            #                      =:   ii   + \bar{m_i}^2 - 2 N_i * mi$$
-            #
-            ii = np.count_nonzero(
-                np.abs(
-                    sts[i].magnitude.reshape((-1, 1)) -
-                    sts[i].magnitude.reshape((1, -1))) < bin_size)
-            jj = np.count_nonzero(
-                np.abs(
-                    sts[j].magnitude.reshape((-1, 1)) -
-                    sts[j].magnitude.reshape((1, -1))) < bin_size)
+                # Denominator:
+                # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
+                #                      =:   ii   + \bar{m_i}^2 - 2 N_i * mi$$
+                #
+                ii = np.count_nonzero(np.abs(np.subtract.outer(
+                    sts_i, sts_i)) < bin_size.magnitude)
+                jj = np.count_nonzero(np.abs(np.subtract.outer(
+                    sts_j, sts_j)) < bin_size.magnitude)
 
-            cc_denom = np.sqrt(
-                (ii + num_bins * (m_i ** 2) -
-                    2 * m_i * n_i) *
-                (jj + num_bins * (m_j ** 2) -
-                    2 * m_j * n_j))
+                cc_denom = np.sqrt(
+                    (ii + num_bins * (m_i ** 2) -
+                        2 * m_i * n_i) *
+                    (jj + num_bins * (m_j ** 2) -
+                        2 * m_j * n_j))
 
-            # Fill entry of correlation matrix
-            C[i, j] = C[j, i] = cc_enum / cc_denom
+                # Fill entry of correlation matrix
+                C[i, j] = C[j, i] = cc_enum / cc_denom
 
     return C
 
@@ -177,25 +176,20 @@ def corrcoef_binned(binned_sts, clip=False):
     -------
     >>>
     '''
-    # TODO: need a num_st method!
-    num_neuron = binned_sts.matrix_unclipped().shape[0]
+    num_neurons = binned_sts.matrix_rows
 
     # Pre-allocate correlation matrix
-    C = np.zeros((num_neuron, num_neuron))
+    C = np.zeros((num_neurons, num_neurons))
 
-    spike_indices = binned_sts.spike_indices
+    spmat = binned_sts.sparse_mat_unclip
 
-    for i in range(num_neuron):
-        for j in range(i, num_neuron):
-            # Get positions (bin IDs) of non-zero entries
-            bins_i = spike_indices[i]
-            bins_j = spike_indices[j]
-
+    for i in range(num_neurons):
+        for j in range(i, num_neurons):
             # Find unique bin IDs and corresponding spike counts per bin
-            bins_unique_i, bins_unique_counts_i = np.unique(
-                bins_i, return_counts=True)
-            bins_unique_j, bins_unique_counts_j = np.unique(
-                bins_j, return_counts=True)
+            bins_unique_i = spmat[i][:].nonzero()[1]
+            bins_unique_counts_i = spmat[i][:].data
+            bins_unique_j = spmat[j][:].nonzero()[1]
+            bins_unique_counts_j = spmat[j][:].data
 
             # Intersect indices to identify coincident spikes
             inters_unique = np.intersect1d(
@@ -206,8 +200,8 @@ def corrcoef_binned(binned_sts, clip=False):
                 n_i = len(bins_unique_i)
                 n_j = len(bins_unique_j)
             else:
-                n_i = len(bins_i)
-                n_j = len(bins_j)
+                n_i = np.sum(bins_unique_counts_i)
+                n_j = np.sum(bins_unique_counts_j)
 
             # Enumerator:
             # $$<b_i-m_i, b_j-m_j> = b_i*b_j + m_i*m_j
@@ -259,13 +253,13 @@ def corrcoef_binned(binned_sts, clip=False):
         mat = scipy.sparse.csr_matrix(binned_sts.matrix_unclipped())
 
     # TODO: need a num_st method!
-    num_neuron = binned_sts.matrix_unclipped().shape[0]
+    num_neurons = binned_sts.matrix_unclipped().shape[0]
 
     # Pre-allocate correlation matrix
-    C = np.zeros((num_neuron, num_neuron))
+    C = np.zeros((num_neurons, num_neurons))
 
-    for i in range(num_neuron):
-        for j in range(i, num_neuron):
+    for i in range(num_neurons):
+        for j in range(i, num_neurons):
             mean_i = mat[i].mean()
             mean_j = mat[j].mean()
 
