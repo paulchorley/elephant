@@ -425,7 +425,7 @@ class Binned:
                                  self.t_start, self.t_stop)
         self._sparse_mat_u = None
         self._sparse_mat_c = None
-        # Now create spike_indices
+        # Now create unclipped version of sparse matrix
         self.__convert_to_binned(spiketrains)
 
     # =========================================================================
@@ -726,13 +726,12 @@ class Binned:
         >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
-        >>> st = n.SpikeTrain(
-                [0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
+        >>> st = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
+        >>> x = conv.Binned(st, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
         >>> print(x.spike_indices)
         [[0, 0, 1, 3, 4, 5, 6]]
         >>> print(x.sparse_mat_unclip.nonzero()[1])
-        [0, 1, 3, 4, 5, 6]
+        [0 1 3 4 5 6]
 
         """
         spike_idx = []
