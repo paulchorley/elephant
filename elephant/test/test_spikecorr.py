@@ -9,7 +9,7 @@ Unit tests for the spikecorr module.
 import unittest
 
 import numpy as np
-# from numpy.testing.utils import assert_array_almost_equal
+from numpy.testing.utils import assert_array_almost_equal
 from numpy.testing.utils import assert_array_equal
 import quantities as pq
 import neo
@@ -21,8 +21,8 @@ class corrcoeff_TestCase(unittest.TestCase):
     def setUp(self):
         # These two arrays must be such that they do not have coincidences
         # spanning across two neighbor bins assuming ms bins [0,1),[1,2),...
-        self.test_array_1d_0 = [1.3, 7.56, 15.87, 28.23]
-        self.test_array_1d_1 = [1.02, 2.71, 18.82, 28.46, 28.79]
+        self.test_array_1d_0 = [1.3, 7.56, 15.87, 28.23, 30.9, 38.2, 43.2]
+        self.test_array_1d_1 = [1.02, 2.71, 18.82, 28.46, 28.79, 43.6]
 
         # Build spike trains
         self.st_0 = neo.SpikeTrain(
@@ -144,7 +144,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         # Check dimensions
         self.assertEqual(len(target), 2)
         # Check result
-        assert_array_equal(target, 1.0)
+        assert_array_almost_equal(target, 1.0)
 
     def test_corrcoef_binned_same_spiketrains(self):
         '''
@@ -160,7 +160,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         # Check dimensions
         self.assertEqual(len(target), 2)
         # Check result
-        assert_array_equal(target, 1.0)
+        assert_array_almost_equal(target, 1.)
 
     def test_corrcoef__short_input(self):
         '''
@@ -172,7 +172,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         # Check dimensions
         # self.assertEqual(len(target), 1)
         # Check result
-        self.assertEqual(target, 1.)
+        self.assertAlmostEqual(target, 1.)
 
     def test_corrcoef__binned_short_input(self):
         '''
@@ -187,7 +187,8 @@ class corrcoeff_TestCase(unittest.TestCase):
         # Check dimensions
         # self.assertEqual(len(target), 1)
         # Check result
-        self.assertEqual(target, 1.)
+        print target
+        self.assertAlmostEqual(target, 1.)
 
 
 if __name__ == '__main__':
