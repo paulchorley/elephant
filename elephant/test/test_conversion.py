@@ -384,6 +384,20 @@ class BinnedTestCase(unittest.TestCase):
                                        matrix_clipped))
         self.assertTrue(np.array_equal(x_unclipped.mat_u,
                                        matrix_unclipped))
+        # Get the stored matrix using method
+        self.assertTrue(
+            np.array_equal(x_clipped.matrix_clipped(store_mat=True),
+                           matrix_clipped))
+        self.assertTrue(
+            np.array_equal(x_unclipped.matrix_unclipped(store_mat=True),
+                           matrix_unclipped))
+
+        # Test storing of sparse mat
+        sparse_clip = x_clipped.sparse_mat_clip
+        x_clipped.store_sparse_mat_clip()
+        self.assertTrue(np.array_equal(sparse_clip.toarray(),
+                                       x_clipped.sparse_mat_clip.toarray()))
+
         # New class without calculating the matrix
         x_clipped = conv.Binned(a, binsize=pq.s, t_start=0 * pq.s,
                                 t_stop=10. * pq.s, store_mat=True)
