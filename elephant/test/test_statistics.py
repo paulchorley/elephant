@@ -10,7 +10,7 @@ import unittest
 
 import neo
 import numpy as np
-from numpy.testing.utils import assert_array_almost_equal
+from numpy.testing.utils import assert_array_almost_equal, assert_array_equal
 import quantities as pq
 
 import elephant.statistics as es
@@ -300,6 +300,51 @@ class FanoFactorTestCase(unittest.TestCase):
     def test_fanofactor_list_same(self):
         lst = [self.test_list[0]] * 3
         self.assertEqual(es.fanofactor(lst), 0.0)
+
+
+class PethTestCase(unittest.TestCase):
+    def setUp(self):
+        self.spiketrain_a = neo.SpikeTrain(
+            [0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
+        self.spiketrain_b = neo.SpikeTrain(
+            [0.1, 0.7, 1.2, 2.2, 4.3, 5.5, 8.0] * pq.s, t_stop=10.0 * pq.s)
+        self.spiketrains = [self.spiketrain_a, self.spiketrain_b]
+
+    def tearDown(self):
+        del self.spiketrain_a
+        self.spiketrain_a = None
+        del self.spiketrain_b
+        self.spiketrain_b = None
+
+    def test_peth_unclipped(self):
+        targ = [4, 2, 1, 1, 2, 2, 1, 0, 1, 0]
+        peth = es.peth(self.spiketrains, w=pq.s)
+        assert_array_equal(targ, peth.magnitude)
+
+    def test_peth_clipped(self):
+        targ = [2, 2, 1, 1, 2, 2, 1, 0, 1, 0]
+        peth = es.peth(self.spiketrains, w=pq.s, clip=True)
+        assert_array_equal(targ, peth.magnitude)
+
+    def test_peth_tstart_tstop(self):
+        # Start, stop short range
+        targ = [2, 1]
+        peth = es.peth(self.spiketrains, w=pq.s, t_start=5*pq.s, t_stop=7*pq.s)
+        assert_array_equal(targ, peth.magnitude)
+
+    def test_peth_output(self):
+        # Normalization mean
+        peth = es.peth(self.spiketrains, w=pq.s, output='mean')
+        targ = np.array([4, 2, 1, 1, 2, 2, 1, 0, 1, 0], dtype=float) / 2
+        assert_array_equal(targ, peth.magnitude)
+
+        # Normalization rate
+        peth = es.peth(self.spiketrains, w=pq.s, output='rate')
+        assert_array_equal(peth.view(pq.Quantity), targ * 1/pq.s)
+
+        # Normalization unspecified, raises error
+        self.assertRaises(ValueError, es.peth, self.spiketrains, w=pq.s,
+                          output=' ')
 
 if __name__ == '__main__':
     unittest.main()

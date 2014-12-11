@@ -67,3 +67,8 @@ Thumbs.db
 
 # Things specific to this project #
 ###################################
+.coveragerc
+.idea
+.ropeproject
+cover
+htmlcov

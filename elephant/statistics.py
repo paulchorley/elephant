@@ -229,12 +229,10 @@ def peth(sts, w, t_start=None, t_stop=None, output='counts', clip=False):
 
     """
 
-    # Find the internal range t_start, t_stop where all spike trains are
-    # defined; cut all spike trains taking that time range only
-    max_tstart = max([t.t_start for t in sts])
-    min_tstop = min([t.t_stop for t in sts])
-
     if t_start is None:
+        # Find the internal range for t_start, where all spike trains are
+        # defined; cut all spike trains taking that time range only
+        max_tstart = max([t.t_start for t in sts])
         t_start = max_tstart
         if not all([max_tstart == t.t_start for t in sts]):
             warnings.warn(
@@ -242,6 +240,8 @@ def peth(sts, w, t_start=None, t_stop=None, output='counts', clip=False):
                 "using maximum t_start as t_start.")
 
     if t_stop is None:
+        # Find the internal range for t_stop
+        min_tstop = min([t.t_stop for t in sts])
         t_stop = min_tstop
         if not all([min_tstop == t.t_stop for t in sts]):
             warnings.warn(

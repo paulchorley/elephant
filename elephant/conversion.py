@@ -425,7 +425,7 @@ class Binned:
                                  self.t_start, self.t_stop)
         self._sparse_mat_u = None
         self._sparse_mat_c = None
-        # Now create spike_indices
+        # Now create unclipped version of sparse matrix
         self.__convert_to_binned(spiketrains)
 
     # =========================================================================
@@ -683,15 +683,9 @@ class Binned:
             return self._sparse_mat_u
 
     @property
-    def sparse_mat_clip(self, store=False):
+    def sparse_mat_clip(self):
         """
         Getter for **clipped** version of the sparse matrix.
-
-        Parameters
-        ----------
-        store : bool
-            If the binary sparse matrix should be kept in memory.
-            Default is False
 
         Returns
         -------
@@ -703,17 +697,19 @@ class Binned:
         scipy.sparse.csr_matrix
         matrix_unclipped
         """
-        if store:
-            if self._sparse_mat_c:
-                return self._sparse_mat_c
-            else:
-                self._sparse_mat_c = self._sparse_mat_u.copy()
-                self._sparse_mat_c[self._sparse_mat_c.nonzero()] = 1
-                return self._sparse_mat_c
+        if self._sparse_mat_c is not None:
+            return self._sparse_mat_c
         # Return sparse Matrix without storing
         tmp_mat = self._sparse_mat_u.copy()
         tmp_mat[tmp_mat.nonzero()] = 1
         return tmp_mat
+
+    def store_sparse_mat_clip(self):
+        """
+        Stores the clipped version of the matrix in memory.
+
+        """
+        self._sparse_mat_c = self.sparse_mat_clip
 
     @property
     def spike_indices(self):
@@ -730,13 +726,12 @@ class Binned:
         >>> import elephant.conversion as conv
         >>> import neo as n
         >>> import quantities as pq
-        >>> st = n.SpikeTrain(
-                [0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
-        >>> x = conv.Binned(a, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
+        >>> st = n.SpikeTrain([0.5, 0.7, 1.2, 3.1, 4.3, 5.5, 6.7] * pq.s, t_stop=10.0 * pq.s)
+        >>> x = conv.Binned(st, num_bins=10, binsize=1 * pq.s, t_start=0 * pq.s)
         >>> print(x.spike_indices)
         [[0, 0, 1, 3, 4, 5, 6]]
         >>> print(x.sparse_mat_unclip.nonzero()[1])
-        [0, 1, 3, 4, 5, 6]
+        [0 1 3 4 5 6]
 
         """
         spike_idx = []
@@ -868,7 +863,7 @@ class Binned:
                 raise AssertionError('store_mat is not a boolean')
             self.store_mat_u = kwargs['store_mat']
         if self.mat_u is not None:
-            return self.mat_u.toarray()
+            return self.mat_u
         if self.store_mat_u:
             self.mat_u = self.sparse_mat_unclip.toarray()
             return self.mat_u
