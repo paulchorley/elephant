@@ -157,11 +157,11 @@ plt.suptitle('Mean Firing Rate Distribution', fontsize=14)
 
 plt.subplot(1, 2, 1)
 plt.title('Experiment')
-plots.rate_distribution(rates_exp, bin_width=2 * pq.Hz)
+plots.rate_distribution(rates_exp, bin_width=0.5 * pq.Hz)
 
 plt.subplot(1, 2, 2)
 plt.title('Model')
-plots.rate_distribution(rates_mdl, bin_width=0.25 * pq.Hz)
+plots.rate_distribution(rates_mdl, bin_width=0.5 * pq.Hz)
 
 plt.subplots_adjust(hspace=0.5)
 # plt.show()
@@ -184,7 +184,7 @@ plots.isi_distribution(
 plt.subplot(1, 2, 2)
 plt.title('Model')
 plots.isi_distribution(
-    isis_mdl[np.argsort(rates_mdl)[-1]], bin_width=20 * pq.ms)
+    isis_mdl[np.argsort(rates_mdl)[-1]], bin_width=5 * pq.ms)
 
 plt.subplots_adjust(hspace=0.5)
 # plt.show()
@@ -195,16 +195,18 @@ plt.subplots_adjust(hspace=0.5)
 cvs_exp = [elephant.statistics.cv(isi) for isi in isis_exp]
 cvs_mdl = [elephant.statistics.cv(isi) for isi in isis_mdl]
 
+cvbins = np.linspace(0, 1.5, 50)
+
 plt.figure(figsize=(16, 4))
 plt.suptitle('CV Distribution', fontsize=14)
 
 plt.subplot(1, 2, 1)
 plt.title('Experiment')
-plots.cv_distribution(cvs_exp, n_bins=25)
+plots.cv_distribution(cvs_exp, bins=cvbins)
 
 plt.subplot(1, 2, 2)
 plt.title('Model')
-plots.cv_distribution(cvs_mdl, n_bins=25)
+plots.cv_distribution(cvs_mdl, bins=cvbins)
 
 plt.subplots_adjust(hspace=0.5)
 # plt.show()
@@ -215,16 +217,18 @@ plt.subplots_adjust(hspace=0.5)
 lvs_exp = [elephant.statistics.lv(isi) for isi in isis_exp]
 lvs_mdl = [elephant.statistics.lv(isi) for isi in isis_mdl]
 
+lvbins = np.linspace(0, 1.5, 50)
+
 plt.figure(figsize=(16, 4))
 plt.suptitle('LV Distribution', fontsize=14)
 
 plt.subplot(1, 2, 1)
 plt.title('Experiment')
-plots.lv_distribution(lvs_exp, n_bins=25)
+plots.lv_distribution(lvs_exp, bins=lvbins)
 
 plt.subplot(1, 2, 2)
 plt.title('Model')
-plots.lv_distribution(lvs_mdl, n_bins=25)
+plots.lv_distribution(lvs_mdl, bins=lvbins)
 
 plt.subplots_adjust(hspace=0.5)
 # plt.show()
@@ -235,10 +239,10 @@ plt.subplots_adjust(hspace=0.5)
 # TODO: Too slow!
 import time
 a = time.time()
-cc_matrix_exp_prec = elephant.spikecorr.corrcoef(
-    sts_exp, bin_size=10 * pq.ms)
-cc_matrix_mdl_prec = elephant.spikecorr.corrcoef(
-    sts_mdl, bin_size=10 * pq.ms)
+cc_matrix_exp_prec = elephant.spikecorr.corrcoef_continuous(
+    sts_exp, coinc_width=20 * pq.ms)
+cc_matrix_mdl_prec = elephant.spikecorr.corrcoef_continuous(
+    sts_mdl, coinc_width=20 * pq.ms)
 print "Continuous:", time.time() - a
 
 a = time.time()
@@ -246,36 +250,65 @@ sts_exp_bin = elephant.conversion.Binned(
     sts_exp, binsize=20 * pq.ms, t_start=10 * pq.s, t_stop=60 * pq.s)
 sts_mdl_bin = elephant.conversion.Binned(
     sts_mdl, binsize=20 * pq.ms, t_start=10 * pq.s, t_stop=60 * pq.s)
-cc_matrix_exp = elephant.spikecorr.corrcoef_binned(sts_exp_bin, clip=False)
-cc_matrix_mdl = elephant.spikecorr.corrcoef_binned(sts_mdl_bin, clip=False)
-print "Binned:", time.time() - a
+print "Binning:", time.time() - a
+
+a = time.time()
+cc_matrix_exp_bc = elephant.spikecorr.corrcoef(sts_exp_bin, clip=True)
+cc_matrix_mdl_bc = elephant.spikecorr.corrcoef(sts_mdl_bin, clip=True)
+print "Binned Clipped:", time.time() - a
+
+a = time.time()
+cc_matrix_exp_bu = elephant.spikecorr.corrcoef(sts_exp_bin, clip=False)
+cc_matrix_mdl_bu = elephant.spikecorr.corrcoef(sts_mdl_bin, clip=False)
+print "Binned Unclipped:", time.time() - a
+
+ccbins = np.linspace(-0.5, 0.5, 50)
 
 # TODO Fix y-ticks
 plt.figure(figsize=(16, 4))
 plt.suptitle(
-    "Binned Pairwise Correlation Coefficient Distribution", fontsize=14)
+    "Binned Unclipped Pairwise Correlation Coefficient Distribution",
+    fontsize=14)
 
 plt.subplot(1, 2, 1)
 plt.title('Experiment')
-plots.cc_distribution(cc_matrix_exp, n_bins=np.linspace(-0.5, 0.5, 50))
+plots.cc_distribution(cc_matrix_exp_bu, bins=ccbins)
 
 plt.subplot(1, 2, 2)
 plt.title('Model')
-plots.cc_distribution(cc_matrix_mdl, n_bins=np.linspace(-0.5, 0.5, 50))
+plots.cc_distribution(cc_matrix_mdl_bu, bins=ccbins)
 
 plt.subplots_adjust(hspace=0.5)
-plt.show()
+
+
 plt.figure(figsize=(16, 4))
 plt.suptitle(
-    "Continuous Pairwise Correlation Coefficient Distribution", fontsize=14)
+    "Binned Clipped Pairwise Correlation Coefficient Distribution",
+    fontsize=14)
 
 plt.subplot(1, 2, 1)
 plt.title('Experiment')
-plots.cc_distribution(cc_matrix_exp_prec, n_bins=np.linspace(-0.5, 0.5, 50))
+plots.cc_distribution(cc_matrix_exp_bc, bins=ccbins)
 
 plt.subplot(1, 2, 2)
 plt.title('Model')
-plots.cc_distribution(cc_matrix_mdl_prec, n_bins=np.linspace(-0.5, 0.5, 50))
+plots.cc_distribution(cc_matrix_mdl_bc, bins=ccbins)
+
+plt.subplots_adjust(hspace=0.5)
+
+
+plt.figure(figsize=(16, 4))
+plt.suptitle(
+    "Continuous Pairwise Correlation Coefficient Distribution",
+    fontsize=14)
+
+plt.subplot(1, 2, 1)
+plt.title('Experiment')
+plots.cc_distribution(cc_matrix_exp_prec, bins=ccbins)
+
+plt.subplot(1, 2, 2)
+plt.title('Model')
+plots.cc_distribution(cc_matrix_mdl_prec, bins=ccbins)
 
 plt.subplots_adjust(hspace=0.5)
 plt.show()

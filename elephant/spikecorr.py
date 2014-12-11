@@ -13,8 +13,6 @@ import scipy.sparse
 import quantities as pq
 import neo
 import elephant.conversion as rep
-# import conversion
-# from numpy.core.test_rational import denominator
 
 
 def corrcoef(binned_sts, clip=False):
@@ -28,8 +26,8 @@ def corrcoef(binned_sts, clip=False):
     and $b_j$ denote the binary vectors and $m_i$ and  $m_j$ their respective
     averages. Then
 
-    $$ C[i,j] = <b_i-m_i, b_j-m_j> /
-               \sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>} $$
+    .math $$ C[i,j] = <b_i-m_i, b_j-m_j> /
+                      \sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>} $$
 
     where <..,.> is the scalar product of two vectors.
 
@@ -50,8 +48,8 @@ def corrcoef(binned_sts, clip=False):
         the binned vectors $b_i$ contain the actually spike counts.
         Default: False
 
-    Output
-    ------
+    Returns
+    -------
     C : ndarrray
         The square matrix of correlation coefficients. The element
         $C[i,j]=C[j,i]$ is the Pearson's correlation coefficient between
@@ -76,28 +74,26 @@ def corrcoef(binned_sts, clip=False):
     spmat = binned_sts.sparse_mat_unclip
 
     # For each row, extract the nonzero column indices and the corresponding
-    # data in the matrix (for performance reasons
-    bins_unique = []
-    bins_unique_counts = []
-    for s in spmat:
-        bins_unique.append(s.nonzero()[1])
-        bins_unique_counts.append(s.data)
+    # data in the matrix (for performance reasons)
+    bin_idx_unique = []
+    bin_counts_unique = []
+    if clip:
+        for s in spmat:
+            bin_idx_unique.append(s.nonzero()[1])
+    else:
+        for s in spmat:
+            bin_counts_unique.append(s.data)
 
+    # All combinations of spike trains
     for i in range(num_neurons):
         for j in range(i, num_neurons):
-            # Find unique bin IDs and corresponding spike counts per bin
-            bins_unique_i = bins_unique[i]
-            bins_unique_counts_i = bins_unique_counts[i]
-            bins_unique_j = bins_unique[j]
-            bins_unique_counts_j = bins_unique_counts[j]
-
             # Number of spikes in i and j
             if clip:
-                n_i = len(bins_unique_i)
-                n_j = len(bins_unique_j)
+                n_i = len(bin_idx_unique[i])
+                n_j = len(bin_idx_unique[j])
             else:
-                n_i = np.sum(bins_unique_counts_i)
-                n_j = np.sum(bins_unique_counts_j)
+                n_i = np.sum(bin_counts_unique[i])
+                n_j = np.sum(bin_counts_unique[j])
 
             # Mean rates in i and j
             m_i = n_i / binned_sts.num_bins
@@ -114,7 +110,7 @@ def corrcoef(binned_sts, clip=False):
                 # Intersect indices to identify number of coincident spikes in
                 # i and j (more efficient than directly using the dot product)
                 ij = len(np.intersect1d(
-                    bins_unique_i, bins_unique_j, assume_unique=True))
+                    bin_idx_unique[i], bin_idx_unique[j], assume_unique=True))
             else:
                 # Calculate dot product b_i*b_j between unclipped matrices
                 ij = spmat[i].dot(spmat[j].transpose()).toarray()[0][0]
@@ -126,18 +122,17 @@ def corrcoef(binned_sts, clip=False):
             # $$ <b_i-m_i, b_i-m_i>
             #       = <b_i, b_i> + m_i^2 - 2 <b_i, M_i>
             #       =:    ii     + m_i^2 - 2 n_i * m_i   $$
-            #
             if clip:
                 # Here, b_i*b_i is just the number of filled bins (since each
                 # filled bin of a clipped spike train has value equal to 1)
-                ii = len(bins_unique_i)
-                jj = len(bins_unique_j)
+                ii = len(bin_idx_unique[i])
+                jj = len(bin_idx_unique[j])
             else:
                 # directly calculate the dot product based on the counts of all
                 # filled entries (more efficient than using the dot product of
                 # the rows of the sparse matrix)
-                ii = np.dot(bins_unique_counts_i, bins_unique_counts_i)
-                jj = np.dot(bins_unique_counts_j, bins_unique_counts_j)
+                ii = np.dot(bin_counts_unique[i], bin_counts_unique[i])
+                jj = np.dot(bin_counts_unique[j], bin_counts_unique[j])
 
             cc_denom = np.sqrt(
                 (ii + binned_sts.num_bins * (m_i ** 2) -
@@ -156,8 +151,7 @@ def corrcoef(binned_sts, clip=False):
     else:
         mat = scipy.sparse.csr_matrix(binned_sts.matrix_unclipped())
 
-    # TODO: need a num_st method!
-    num_neurons = binned_sts.matrix_unclipped().shape[0]
+    num_neurons = binned_sts.matrix_rows
 
     # Pre-allocate correlation matrix
     C = np.zeros((num_neurons, num_neurons))
@@ -177,7 +171,7 @@ def corrcoef(binned_sts, clip=False):
     return C
 
 
-def corrcoef_continuous(sts, bin_size):
+def corrcoef_continuous(sts, coinc_width):
     '''
     Calculate the NxN matrix of pairwise Pearson's correlation coefficients
     between all combinations given a list of N spike trains.
@@ -188,8 +182,8 @@ def corrcoef_continuous(sts, bin_size):
     and $b_j$ denote the binary vectors and $m_i$ and  $m_j$ their respective
     averages. Then
 
-    $$ C[i,j] = <b_i-m_i, b_j-m_j> /
-               \sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>} $$
+    .math $$ C[i,j] = <b_i-m_i, b_j-m_j> /
+                      \sqrt{<b_i-m_i, b_i-m_i>*<b_j-m_j,b_j-m_j>} $$
 
     where <..,.> is the scalar product of two vectors.
 
@@ -204,23 +198,20 @@ def corrcoef_continuous(sts, bin_size):
     ----------
     sts : list of SpikeTrain
         A list of SpikeTrain objects with common t_start and t_stop.
-    bin_size : Quantity
-        The bin size used to bin the spike trains.
-    clip : bool, optional
-        If True, two spikes of the a particular spike train falling in the same
-        bin are counted as 1, resulting in binary binned vectors b_i. If False,
-        the binned vectors $b_i$ contain the actually spike counts.
-        Default: True
+    coinc_width : Quantity
+        The coincidence width for which to calculate the correlation
+        coefficient. Any two spikes $t_i, t_j$ with
+            $$|t_i-t_j|<coinc_width$$ are
+        treated as coincident.
 
-    Output
-    ------
+    Returns
+    -------
     C : ndarrray
         The square matrix of correlation coefficients. The element
         $C[i,j]=C[j,i]$ is the Pearson's correlation coefficient between sts[i]
         and sts[j]. If sts contains only one SpikeTrain, C=1.0.
 
     '''
-
     # Check that all spike trains have same t_start and t_stop
     t_start = sts[0].t_start
     t_stop = sts[0].t_stop
@@ -230,27 +221,31 @@ def corrcoef_continuous(sts, bin_size):
             "All spike trains must have common t_start and t_stop.")
 
     num_bins = np.ceil(
-        (t_stop.rescale(bin_size.units) - t_start.rescale(bin_size.units)) /
-        bin_size).magnitude
+        (t_stop.rescale(coinc_width.units) -
+            t_start.rescale(coinc_width.units)) /
+        coinc_width).magnitude
     num_neuron = len(sts)
 
     # Pre-allocate correlation matrix
     C = np.zeros((num_neuron, num_neuron))
 
-    sts_rescale = [st.rescale(bin_size.units).magnitude for st in sts]
+    # Rescale all spike trains the resolution of the bin width
+    sts_rescale = [st.rescale(coinc_width.units).magnitude for st in sts]
+
+    # All combinations of spike trains
     for i, sts_i in enumerate(sts_rescale):
         for j, sts_j in enumerate(sts_rescale):
             # Calculate only half the correlation coefficient matrix
             if j >= i:
                 # Enumerator:
-                # $$<b_i-m_i, b_j-m_j> = b_i*b_j + m_i*m_j
-                #                        - b_i * \bar{mj} - b_j * \bar{m_i}
-                #                      =:   ij   + m_i*m_j - N_i * mj - N_j * m_i$$
-                # where N_i is the spike count of spike train $i$ and
-                # $\bar{m_i}$ is a vector $\bar{m_i}*\bar{1}$.
-
+                # $$ <b_i-m_i, b_j-m_j>
+                #      = <b_i, b_j> + l*m_i*m_j - <b_i, M_j> - <b_j, M_i>
+                #      =:    ij     + l*m_i*m_j - n_i * m_j  - n_j * m_i    $$
+                # where $n_i$ is the spike count of spike train $i$,
+                # $l$ is the number of bins used (i.e., length of $b_i$),
+                # and $M_i$ is a vector [m_i, m_i,..., m_i].
                 ij = np.count_nonzero(np.abs(np.subtract.outer(
-                    sts_i, sts_j)) < bin_size.magnitude)
+                    sts_i, sts_j)) < coinc_width.magnitude)
 
                 # Number of spikes in i and j
                 n_i = len(sts_i)
@@ -262,13 +257,13 @@ def corrcoef_continuous(sts, bin_size):
                     m_i * n_j - m_j * n_i
 
                 # Denominator:
-                # $$<b_i-m_i, b_i-m_i> = b_i*b_i + \bar{m_i}^2 - 2 b_i * \bar{mi}
-                #                      =:   ii   + \bar{m_i}^2 - 2 N_i * mi$$
-                #
+                # $$ <b_i-m_i, b_i-m_i>
+                #       = <b_i, b_i> + m_i^2 - 2 <b_i, M_i>
+                #       =:    ii     + m_i^2 - 2 n_i * m_i   $$
                 ii = np.count_nonzero(np.abs(np.subtract.outer(
-                    sts_i, sts_i)) < bin_size.magnitude)
+                    sts_i, sts_i)) < coinc_width.magnitude)
                 jj = np.count_nonzero(np.abs(np.subtract.outer(
-                    sts_j, sts_j)) < bin_size.magnitude)
+                    sts_j, sts_j)) < coinc_width.magnitude)
 
                 cc_denom = np.sqrt(
                     (ii + num_bins * (m_i ** 2) -

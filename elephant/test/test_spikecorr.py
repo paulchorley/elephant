@@ -41,7 +41,8 @@ class corrcoeff_TestCase(unittest.TestCase):
         '''
 
         # Calculate clipped and unclipped
-        res = sc.corrcoef([self.st_0, self.st_1], bin_size=1 * pq.ms)
+        res = sc.corrcoef_continuous(
+            [self.st_0, self.st_1], coinc_width=1 * pq.ms)
 
         # Check dimensions
         self.assertEqual(len(res), 2)
@@ -71,9 +72,9 @@ class corrcoeff_TestCase(unittest.TestCase):
         '''
 
         # Calculate clipped and unclipped
-        res_clipped = sc.corrcoef_binned(
+        res_clipped = sc.corrcoef(
             self.binned_st, clip=True)
-        res_unclipped = sc.corrcoef_binned(
+        res_unclipped = sc.corrcoef(
             self.binned_st, clip=False)
 
         # Check dimensions
@@ -123,8 +124,9 @@ class corrcoeff_TestCase(unittest.TestCase):
         borders.
         '''
         # Calculate non-binned and binned corrcoef
-        res_nonbinned = sc.corrcoef([self.st_0, self.st_1], bin_size=1 * pq.ms)
-        res_binned = sc.corrcoef_binned(
+        res_nonbinned = sc.corrcoef_continuous(
+            [self.st_0, self.st_1], coinc_width=1 * pq.ms)
+        res_binned = sc.corrcoef(
             self.binned_st, clip=False)
 
         # Check dimensions
@@ -139,7 +141,8 @@ class corrcoeff_TestCase(unittest.TestCase):
         trains evaluates to a 2x2 matrix of ones.
         '''
         # Calculate correlation
-        target = sc.corrcoef([self.st_0, self.st_0], bin_size=1. * pq.ms)
+        target = sc.corrcoef_continuous(
+            [self.st_0, self.st_0], coinc_width=1. * pq.ms)
 
         # Check dimensions
         self.assertEqual(len(target), 2)
@@ -155,7 +158,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         binned_st = conv.Binned(
             [self.st_0, self.st_0], t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
-        target = sc.corrcoef_binned(binned_st)
+        target = sc.corrcoef(binned_st)
 
         # Check dimensions
         self.assertEqual(len(target), 2)
@@ -167,7 +170,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         Test if input list of one SpikeTrain object yields 1.0.
         '''
         # Calculate correlation
-        target = sc.corrcoef([self.st_0], bin_size=1. * pq.ms)
+        target = sc.corrcoef_continuous([self.st_0], coinc_width=1. * pq.ms)
 
         # Check dimensions
         # self.assertEqual(len(target), 1)
@@ -182,7 +185,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         binned_st = conv.Binned(
             self.st_0, t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
-        target = sc.corrcoef_binned(binned_st)
+        target = sc.corrcoef(binned_st)
 
         # Check dimensions
         # self.assertEqual(len(target), 1)
