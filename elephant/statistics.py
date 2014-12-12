@@ -186,14 +186,51 @@ def fanofactor(spiketrains):
     return fano
 
 
-def lv(isi):
-    """ Calculate LV Shinomoto (2003) from the given ISI distribution """
-    if type(isi) is pq.Quantity:
-        isi = isi.magnitude
+def lv(v):
+    """
 
-    return np.mean(
-        (3. * np.power(isi[:-1] - isi[1:], 2)) /
-        np.power(isi[:-1] + isi[1:], 2))
+    Calculate the measure of local variation LV (Shinomoto, 2003) for
+    a sequence of time intervals.
+
+    Given the vector v containing the observed time intervals
+    in the time window [t0, t1], LV is defined as:
+
+    .math $$ LV := \\frac{1}{N}\\sum_{i=1}^{N-1}
+                   \\frac{3(isi_i-isi_{i+1})^2}
+                          {(isi_i+isi_{i+1})^2} $$
+
+    The LV is typically computed as a substitute for the classical
+    coefficient of variation, for sequences of events (e.g. spikes)
+    which include some (relatively slow) rate fluctuation.  As with
+    the CV, for a Poisson process, LV=1.
+
+    Parameters
+    ----------
+
+    v : quantity array, numpy array or list
+        Consecutive time intervals
+
+    Returns
+    -------
+    lvar : float or nan
+           The LV of the inter-spike interval of the input spike trains. If an
+           empty list is specified, or if all spike trains are empty, F:=nan.
+
+    """
+
+    # ensure we have an array
+    v = np.array(v)
+
+    # ensure we have enough entries
+    if v.size<2:
+        raise ValueError('sequrence must have at least two entires')
+
+    # calculate the LV
+    lvar = np.mean( (3. * np.power(v[:-1] - v[1:], 2)) /
+                     np.power(v[:-1] + v[1:], 2))
+
+    # return the result
+    return lvar
 
 
 def peth(sts, w, t_start=None, t_stop=None, output='counts', clip=False):
