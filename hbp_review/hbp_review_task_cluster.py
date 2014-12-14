@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # PBS -N HBP_REVIEW_DEMO
-# PBS -d /users/denker/Projects/HBP\ Review\ Demo/hbp_review
+# PBS -d /users/denker/Projects/hbp_review/hbp_review
 # PBS -o /scratch/denker/logs/output.${PBS_JOBID}
 # PBS -e /scratch/denker/logs/error.${PBS_JOBID}
 # PBS -t 0-199
@@ -195,5 +195,6 @@ for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
 # write parameters to disk
 import h5py_wrapper.wrapper
 h5py_wrapper.wrapper.add_to_h5(
-    'correlation_output_' + str(job_parameter) + '.h5',
+    '../results/hbp_review_task/correlation_output_' +
+    str(job_parameter) + '.h5',
     cc, write_mode='w', overwrite_dataset=True)
