@@ -15,11 +15,6 @@ sys.path.insert(1, '../../toolboxes/py/csn_toolbox')
 
 import numpy as np
 import quantities as pq
-
-# remove -- for cluster calculations only
-# import matplotlib
-# matplotlib.use('agg')
-
 import matplotlib.pyplot as plt
 
 # provides neo framework and I/Os to load exp and mdl data
