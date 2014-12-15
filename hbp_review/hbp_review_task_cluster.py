@@ -44,7 +44,6 @@ import mesocircuitio
 import elephant
 
 
-
 #==============================================================================
 # Global variables
 #==============================================================================
@@ -125,7 +124,7 @@ for dta in ['exp', 'mdl']:
 num_total_pairs = 0
 all_combos_unit_i = []
 all_combos_unit_j = []
-for ni in range(num_neurons_exp - 1):
+for ni in range(num_neurons_exp):
     for nj in range(ni, num_neurons_exp):
         all_combos_unit_i.append(ni)
         all_combos_unit_j.append(nj)
