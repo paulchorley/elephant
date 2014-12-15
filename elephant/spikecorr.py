@@ -221,48 +221,94 @@ def corrcoef_continuous(sts, coinc_width):
         coinc_width).magnitude
     num_neuron = len(sts)
 
-    # Pre-allocate correlation matrix
-    C = np.zeros((num_neuron, num_neuron))
-
     # Rescale all spike trains the resolution of the bin width
     sts_rescale = [st.rescale(coinc_width.units).magnitude for st in sts]
 
-    # All combinations of spike trains
+    # Pre-allocate correlation matrix
+    C = np.zeros((num_neuron, num_neuron))
+
+    # First calculate unnormalised values
     for i, sts_i in enumerate(sts_rescale):
-        for j, sts_j in enumerate(sts_rescale):
-            # Calculate only half the correlation coefficient matrix
-            if j >= i:
-                # Enumerator:
-                # $$ <b_i-m_i, b_j-m_j>
-                #      = <b_i, b_j> + l*m_i*m_j - <b_i, M_j> - <b_j, M_i>
-                #      =:    ij     + l*m_i*m_j - n_i * m_j  - n_j * m_i    $$
-                # where $n_i$ is the spike count of spike train $i$,
-                # $l$ is the number of bins used (i.e., length of $b_i$),
-                # and $M_i$ is a vector [m_i, m_i,..., m_i].
-                ij = np.count_nonzero(np.abs(np.subtract.outer(
-                    sts_i, sts_j)) < coinc_width.magnitude)
+        for j, sts_j in enumerate(sts_rescale[i:],i):
 
-                # Number of spikes in i and j
-                n_i = len(sts_i)
-                n_j = len(sts_j)
+            print "Counting",i,j
 
-                cc_enum = ij - n_i * n_j / num_bins
+            # v1: calculate the whole matrix (memory hungry)
+            #C[i,j] = np.count_nonzero(np.abs(np.subtract.outer(
+            #            sts_i, sts_j)) < coinc_width.magnitude)
 
-                # Denominator:
-                # $$ <b_i-m_i, b_i-m_i>
-                #       = <b_i, b_i> + m_i^2 - 2 <b_i, M_i>
-                #       =:    ii     + m_i^2 - 2 n_i * m_i   $$
-                ii = np.count_nonzero(np.abs(np.subtract.outer(
-                    sts_i, sts_i)) < coinc_width.magnitude)
-                jj = np.count_nonzero(np.abs(np.subtract.outer(
-                    sts_j, sts_j)) < coinc_width.magnitude)
+            #v2: calculate spike at a time
+            #for s in sts_i:
+            #    C[i,j] += np.count_nonzero( np.abs(sts_j-s) < 
+            #                                coinc_width.magnitude)
 
-                cc_denom = np.sqrt(
-                    (ii - n_i ** 2 / num_bins) *
-                    (jj - n_j ** 2 / num_bins))
+            # v3: incrementally reduce the comparitor
+            dt = np.array(sts_j)
+            prev = 0
+            for t in sts_i:
+                dt -= (t-prev)
+                prev = t
+                C[i,j] += np.count_nonzero( 
+                    np.abs(dt) < coinc_width.magnitude )
 
-                # Fill entry of correlation matrix
-                C[i, j] = C[j, i] = cc_enum / cc_denom
+    # Normalise all off-diagonal pairs
+    for i, sts_i in enumerate(sts_rescale):
+        for j, sts_j in enumerate(sts_rescale[i+1:],i+1):
+
+            # Precomputed value (to be normalised)
+            ij = C[i,j]
+
+            # Number of spikes in i and j
+            n_i = len(sts_i)
+            n_j = len(sts_j)
+
+            # Numerator:
+            # $$ <b_i-m_i, b_j-m_j>
+            #      = <b_i, b_j> + l*m_i*m_j - <b_i, M_j> - <b_j, M_i>
+            #      =:    ij     + l*m_i*m_j - n_i * m_j  - n_j * m_i    $$
+            # where $n_i$ is the spike count of spike train $i$,
+            # $l$ is the number of bins used (i.e., length of $b_i$),
+            # and $M_i$ is a vector [m_i, m_i,..., m_i].
+            cc_enum = ij - n_i * n_j / num_bins
+
+            # Denominator:
+            # $$ <b_i-m_i, b_i-m_i>
+            #       = <b_i, b_i> + m_i^2 - 2 <b_i, M_i>
+            #       =:    ii     + m_i^2 - 2 n_i * m_i   $$
+            cc_denom = np.sqrt(
+                (C[i,i] - n_i ** 2 / num_bins) *
+                (C[j,j] - n_j ** 2 / num_bins))
+
+            # Fill entry of correlation matrix
+            C[i, j] = C[j, i] = cc_enum / cc_denom
+
+    # Normalise diagonal entries
+    for i, sts_i in enumerate(sts_rescale):
+
+        # Precomputed value (to be normalised)
+        ii = C[i,i]
+
+        # Number of spikes in i
+        n_i = len(sts_i)
+
+        # Numerator:
+        # $$ <b_i-m_i, b_j-m_j>
+        #      = <b_i, b_j> + l*m_i*m_j - <b_i, M_j> - <b_j, M_i>
+        #      =:    ij     + l*m_i*m_j - n_i * m_j  - n_j * m_i    $$
+        # where $n_i$ is the spike count of spike train $i$,
+        # $l$ is the number of bins used (i.e., length of $b_i$),
+        # and $M_i$ is a vector [m_i, m_i,..., m_i].
+        cc_enum = ii - n_i**2 / num_bins
+
+        # Denominator:
+        # $$ <b_i-m_i, b_i-m_i>
+        #       = <b_i, b_i> + m_i^2 - 2 <b_i, M_i>
+        #       =:    ii     + m_i^2 - 2 n_i * m_i   $$
+        cc_denom = (ii - n_i ** 2 / num_bins)
+
+        # Fill entry of correlation matrix
+        C[i, i] = cc_enum / cc_denom
+
     return C
 
 
