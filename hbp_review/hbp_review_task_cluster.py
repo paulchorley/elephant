@@ -85,7 +85,7 @@ block_mdl = session_mdl.read_block(
 
 # select neuron
 sts_mdl = block_mdl.filter(
-    unit_type='excitatory', unit_id=0, object="SpikeTrain")[:len(sts_exp)]
+    targdict=[{'unit_type': 'excitatory'}, {'unit_id': 0}])[:len(sts_exp)]
 
 print("Number of model spike trains: " + str(len(sts_mdl)))
 

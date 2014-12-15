@@ -78,10 +78,13 @@ block_mdl = session_mdl.read_block(
 
 # select neuron
 sts_mdl = block_mdl.filter(
-    unit_type='excitatory', unit_id=0, object="SpikeTrain")[:len(sts_exp)]
+    targdict=[{'unit_type': 'excitatory'}, {'unit_id': 0}])[:len(sts_exp)]
 
 print("Number of model spike trains: " + str(len(sts_mdl)))
 
+for st in sts_mdl:
+    print st.annotations,
+    print st.unit.channel_indexes
 # create binned spike trains
 sts_mdl_bin = elephant.conversion.Binned(
     sts_mdl, binsize=20 * pq.ms,
