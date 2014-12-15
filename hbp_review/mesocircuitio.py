@@ -440,6 +440,8 @@ class MesoCircuitIO(BaseIO):
             if lazy:
                 rcg.lazy_shape = True
 
+            # count through units per channel, but independent of unit_type
+            uidx = 0
             for chidx, chid in enumerate(channel_list):
                 # Create and append RecordingChannel for each channel in
                 # channel_list for each RecordingChannelGroup (layer)
@@ -454,8 +456,6 @@ class MesoCircuitIO(BaseIO):
                         layer=lid))
 
 
-                # count through units per channel, but independent of unit_type
-                uidx = 0
                 for ut in unit_type:
                     # Load data for each channel
                     path = '/'.join([lid + ut[0].upper(), 'ch%02i' % chid])
