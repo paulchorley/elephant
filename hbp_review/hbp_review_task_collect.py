@@ -95,8 +95,8 @@ num_neurons = len(sts_exp)
 #==============================================================================
 
 rates = {}
-rates['exp'] = [elephant.statistics.mean_firing_rate(st) for st in sts_exp]
-rates['mdl'] = [elephant.statistics.mean_firing_rate(st) for st in sts_mdl]
+rates['exp'] = [elephant.statistics.mean_firing_rate(st).rescale("Hz").magnitude for st in sts_exp]
+rates['mdl'] = [elephant.statistics.mean_firing_rate(st).rescale("Hz").magnitude for st in sts_mdl]
 
 isis_exp = [elephant.statistics.isi(st) for st in sts_exp]
 isis_mdl = [elephant.statistics.isi(st) for st in sts_mdl]
@@ -155,13 +155,14 @@ for dta in ['exp', 'mdl']:
 # values per neuron
 for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
     for neuron_i in range(num_neurons):
-        channel = sts[neuron_i].unit.recordingchannelgroup.channel_indexes
+        channel = sts[neuron_i].unit.channel_indexes
         if type(channel) not in [int, float]:
             channel = channel[0]
         cc[dta]['neuron_topo']['x'][neuron_i] = \
             int(channel) / 10
         cc[dta]['neuron_topo']['y'][neuron_i] = \
             int(channel) % 10
+        print channel
 
         if dta == 'exp':
             cc[dta]['neuron_single_values']['behavior'][neuron_i] = np.array([
@@ -195,6 +196,7 @@ for job_parameter in range(num_tasks):
 
     for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
         for calc_i in cc_part[dta]['pvalue']:
+            print("Processing %s-%i (%i,%i)" % (dta, calc_i, cc_part[dta]['unit_i'][calc_i], cc_part[dta]['unit_j'][calc_i]))
             cc[dta]['func_conn']['cch_peak']['pvalue'][calc_i] = \
                 cc_part[dta]['pvalue'][calc_i]
 
@@ -202,14 +204,14 @@ for job_parameter in range(num_tasks):
             cc[dta]['edges']['id_j'][calc_i] = cc_part[dta]['unit_j'][calc_i]
 
             if cc[dta]['edge_time_series']['cch'] is None:
-                cc[dta]['edge_time_series']['cch'] = np.zeros(
-                    num_edges, len(cc_part[dta]['times_ms'][calc_i]))
-                cc[dta]['edge_time_series']['sig_upper_975'] = np.zeros(
-                    num_edges, len(cc_part[dta]['times_ms'][calc_i]))
-                cc[dta]['edge_time_series']['sig_lower_25'] = np.zeros(
-                    num_edges, len(cc_part[dta]['times_ms'][calc_i]))
-                cc[dta]['edge_time_series']['times_ms'] = np.zeros(
-                    num_edges, len(cc_part[dta]['times_ms'][calc_i]))
+                cc[dta]['edge_time_series']['cch'] = np.zeros((
+                    num_edges, len(cc_part[dta]['times_ms'][calc_i])))
+                cc[dta]['edge_time_series']['sig_upper_975'] = np.zeros((
+                    num_edges, len(cc_part[dta]['times_ms'][calc_i])))
+                cc[dta]['edge_time_series']['sig_lower_25'] = np.zeros((
+                    num_edges, len(cc_part[dta]['times_ms'][calc_i])))
+                cc[dta]['edge_time_series']['times_ms'] = np.zeros((
+                    num_edges, len(cc_part[dta]['times_ms'][calc_i])))
 
             cc[dta]['edge_time_series']['cch'][calc_i, :] = \
                 cc_part[dta]['original'][calc_i]
@@ -223,9 +225,16 @@ for job_parameter in range(num_tasks):
     del cc_part
 
 # write parameters to disk
+filename = '../results/hbp_review_task/viz_output_exp.h5'
+if os.path.exists(filename):
+    os.remove(filename)
 h5py_wrapper.wrapper.add_to_h5(
-    '../results/hbp_review_task/viz_output_exp.h5',
+    filename,
     cc['exp'], write_mode='w', overwrite_dataset=True)
+
+filename = '../results/hbp_review_task/viz_output_mdl.h5'
+if os.path.exists(filename):
+    os.remove(filename)
 h5py_wrapper.wrapper.add_to_h5(
-    '../results/hbp_review_task/viz_output_mdl.h5',
+    filename,
     cc['mdl'], write_mode='w', overwrite_dataset=True)
