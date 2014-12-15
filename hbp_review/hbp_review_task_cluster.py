@@ -175,7 +175,10 @@ for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
 
 # write parameters to disk
 import h5py_wrapper.wrapper
+filename = '../results/hbp_review_task/correlation_output_'
+if os.path.exists(filename):
+    os.remove(filename)
 h5py_wrapper.wrapper.add_to_h5(
-    '../results/hbp_review_task/correlation_output_' +
+    filename +
     str(job_parameter) + '.h5',
     cc, write_mode='w', overwrite_dataset=True)
