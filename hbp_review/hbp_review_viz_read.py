@@ -1,10 +1,12 @@
-import os
-import glob
-
-import numpy as np
+import numpy
 import quantities as pq
-from hbp_review_task_collect import num_neurons
-
+import collections
+import re
+from subprocess import call
+import h5py
+if int(re.sub('\.', '', h5py.version.version)) < 230 :
+    raise ImportError("Using h5py version %s. Version must be >= 2.3.0" % (h5py.version.version))
+import ast
 
 #==============================================================================
 # HDF5 load code
@@ -222,14 +224,14 @@ cc = load_h5(filename)
 
 # example: build correlation matrix
 num_neurons = cc['meta']['num_neurons']
-C = np.zeros((num_neurons, num_neurons))
+C = numpy.zeros((num_neurons, num_neurons))
 for edge_i, p_i in cc['func_conn']['cch']['pvalue']:
     x = cc['edges']['id_i'][edge_i]
     y = cc['edges']['id_j'][edge_i]
     C[x, y] = C[y, x] = p_i
 
 # example: build 10x10 matrix of firing rates (assuming one neuron per x,y coordinate)
-T = np.zeros((10, 10))
+T = numpy.zeros((10, 10))
 for neuron_i in range(num_neurons):
     x = cc['neuron_topo']['x'][neuron_i]
     y = cc['neuron_topo']['y'][neuron_i]
