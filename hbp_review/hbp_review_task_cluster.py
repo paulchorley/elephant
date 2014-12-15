@@ -1,12 +1,3 @@
-#!/usr/bin/python
-# PBS -N HBP_REVIEW_DEMO
-# PBS -d /users/denker/Projects/hbp_review/hbp_review
-# PBS -o /scratch/denker/logs/output.${PBS_JOBID}
-# PBS -e /scratch/denker/logs/error.${PBS_JOBID}
-# PBS -t 0-199
-# PBS -l mem=2GB,walltime=4:00:00
-
-
 #==============================================================================
 # Initialization
 #==============================================================================
@@ -59,6 +50,7 @@ duration = 50.*pq.s
 
 # data should be in a subdirectory 'data' relative to this notebook's location
 # Load only first unit (ID: 1) of each channel
+
 session_exp = rg.restingstateio.RestingStateIO(
     "data/i140701-004", print_diagnostic=False)
 block_exp = session_exp.read_block(
@@ -130,23 +122,13 @@ for ni in range(num_neurons_exp):
         all_combos_unit_j.append(nj)
         num_total_pairs += 1
 
-# distribute number of calculations to each task
-max_calc_per_task = num_total_pairs / num_tasks
-num_calc_last_task = num_total_pairs % num_tasks
-
 # calculate indices in cc['unit_i'] list which to calculate for each task
-task_starts_idx = range(0, num_total_pairs, max_calc_per_task)
-if num_calc_last_task == 0:
-    task_stop_idx = [_ + max_calc_per_task for _ in task_starts_idx]
-else:
-    task_stop_idx = [_ + max_calc_per_task for _ in task_starts_idx[0:-1]]
-    task_stop_idx.append(task_starts_idx[-1] + num_calc_last_task)
+idx = np.linspace(0, num_total_pairs, num_tasks + 1, dtype=int)
+task_starts_idx = idx[:-1]
+task_stop_idx = idx[1:]
 
 print("Task Nr.: %i" % job_parameter)
 print("Number of tasks: %i" % num_tasks)
-print("Max. calcs per task: %i" % max_calc_per_task)
-print("Calcs for last task: %i" % num_calc_last_task)
-
 
 def cch_measure(cch):
     return np.sum(cch[ind - 5:ind + 5].magnitude)
