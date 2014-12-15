@@ -95,14 +95,11 @@ def corrcoef(binned_sts, clip=False):
                 n_i = np.sum(bin_counts_unique[i])
                 n_j = np.sum(bin_counts_unique[j])
 
-            # Mean rates in i and j
-            m_i = n_i / binned_sts.num_bins
-            m_j = n_j / binned_sts.num_bins
-
             # Enumerator:
             # $$ <b_i-m_i, b_j-m_j>
             #      = <b_i, b_j> + l*m_i*m_j - <b_i, M_j> - <b_j, M_i>
-            #      =:    ij     + l*m_i*m_j - n_i * m_j  - n_j * m_i     $$
+            #      =:    ij     + l*m_i*m_j - n_i * m_j  - n_j * m_i
+            #      =     ij     - n_i*n_j/l                         $$
             # where $n_i$ is the spike count of spike train $i$,
             # $l$ is the number of bins used (i.e., length of $b_i$ or $b_j$),
             # and $M_i$ is a vector [m_i, m_i,..., m_i].
@@ -115,13 +112,13 @@ def corrcoef(binned_sts, clip=False):
                 # Calculate dot product b_i*b_j between unclipped matrices
                 ij = spmat[i].dot(spmat[j].transpose()).toarray()[0][0]
 
-            cc_enum = ij + binned_sts.num_bins * m_i * m_j - \
-                m_i * n_j - m_j * n_i
+            cc_enum = ij - n_i * n_j / binned_sts.num_bins
 
             # Denominator:
             # $$ <b_i-m_i, b_i-m_i>
-            #       = <b_i, b_i> + m_i^2 - 2 <b_i, M_i>
-            #       =:    ii     + m_i^2 - 2 n_i * m_i   $$
+            #      = <b_i, b_i> + m_i^2 - 2 <b_i, M_i>
+            #      =:    ii     + m_i^2 - 2 n_i * m_i
+            #      =     ii     - n_i^2 /               $$
             if clip:
                 # Here, b_i*b_i is just the number of filled bins (since each
                 # filled bin of a clipped spike train has value equal to 1)
@@ -135,10 +132,8 @@ def corrcoef(binned_sts, clip=False):
                 jj = np.dot(bin_counts_unique[j], bin_counts_unique[j])
 
             cc_denom = np.sqrt(
-                (ii + binned_sts.num_bins * (m_i ** 2) -
-                    2 * m_i * n_i) *
-                (jj + binned_sts.num_bins * (m_j ** 2) -
-                    2 * m_j * n_j))
+                (ii - (n_i ** 2) / binned_sts.num_bins) *
+                (jj - (n_j ** 2) / binned_sts.num_bins))
 
             # Fill entry of correlation matrix
             C[i, j] = C[j, i] = cc_enum / cc_denom
@@ -251,10 +246,7 @@ def corrcoef_continuous(sts, coinc_width):
                 n_i = len(sts_i)
                 n_j = len(sts_j)
 
-                m_i = n_i / num_bins
-                m_j = n_j / num_bins
-                cc_enum = ij + num_bins * m_i * m_j - \
-                    m_i * n_j - m_j * n_i
+                cc_enum = ij - n_i * n_j / num_bins
 
                 # Denominator:
                 # $$ <b_i-m_i, b_i-m_i>
@@ -266,14 +258,11 @@ def corrcoef_continuous(sts, coinc_width):
                     sts_j, sts_j)) < coinc_width.magnitude)
 
                 cc_denom = np.sqrt(
-                    (ii + num_bins * (m_i ** 2) -
-                        2 * m_i * n_i) *
-                    (jj + num_bins * (m_j ** 2) -
-                        2 * m_j * n_j))
+                    (ii - n_i ** 2 / num_bins) *
+                    (jj - n_j ** 2 / num_bins))
 
                 # Fill entry of correlation matrix
                 C[i, j] = C[j, i] = cc_enum / cc_denom
-
     return C
 
 
