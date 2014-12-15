@@ -114,10 +114,10 @@ lvs['mdl'] = [elephant.statistics.lv(isi) for isi in isis_mdl]
 # Rewrite files
 #==============================================================================
 
-num_total_pairs = 0
+num_edges = 0
 for ni in range(num_neurons):
     for nj in range(ni, num_neurons):
-        num_total_pairs += 1
+        num_edges += 1
 
 cc = {}
 for dta in ['exp', 'mdl']:
@@ -126,38 +126,42 @@ for dta in ['exp', 'mdl']:
     cc[dta]['meta'] = {}
 
     cc[dta]['neuron_topo'] = {}
-    cc[dta]['neuron_topo']['x'] = {}
-    cc[dta]['neuron_topo']['y'] = {}
+    cc[dta]['neuron_topo']['x'] = np.zeros(num_neurons)
+    cc[dta]['neuron_topo']['y'] = np.zeros(num_neurons)
 
     cc[dta]['func_conn'] = {}
     cc[dta]['func_conn']['cch_peak'] = {}
-    cc[dta]['func_conn']['cch_peak']['pvalue'] = {}
+    cc[dta]['func_conn']['cch_peak']['pvalue'] = np.zeros(num_edges)
 
     cc[dta]['edges'] = {}
-    cc[dta]['edges']['id_i'] = {}
-    cc[dta]['edges']['id_j'] = {}
+    cc[dta]['edges']['id_i'] = np.zeros(num_edges)
+    cc[dta]['edges']['id_j'] = np.zeros(num_edges)
 
     cc[dta]['neuron_single_values'] = {}
-    cc[dta]['neuron_single_values']['rate'] = {}
-    cc[dta]['neuron_single_values']['cv'] = {}
-    cc[dta]['neuron_single_values']['lv'] = {}
-    cc[dta]['neuron_single_values']['behavior'] = {}
+    cc[dta]['neuron_single_values']['rate'] = np.zeros(num_neurons)
+    cc[dta]['neuron_single_values']['cv'] = np.zeros(num_neurons)
+    cc[dta]['neuron_single_values']['lv'] = np.zeros(num_neurons)
+    cc[dta]['neuron_single_values']['behavior'] = np.zeros(num_neurons)
 
     cc[dta]['edge_time_series'] = {}
-    cc[dta]['edge_time_series']['cch'] = {}
-    cc[dta]['edge_time_series']['sig_upper_975'] = {}
-    cc[dta]['edge_time_series']['sig_lower_25'] = {}
+    cc[dta]['edge_time_series']['cch'] = None
+    cc[dta]['edge_time_series']['sig_upper_975'] = None
+    cc[dta]['edge_time_series']['sig_lower_25'] = None
+    cc[dta]['edge_time_series']['times_ms'] = None
 
     cc[dta]['meta']['num_neurons'] = num_neurons
-    cc[dta]['meta']['num_edges'] = num_total_pairs
+    cc[dta]['meta']['num_edges'] = num_edges
 
 # values per neuron
 for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
     for neuron_i in range(num_neurons):
+        channel = sts[neuron_i].unit.recordingchannelgroup.channel_indexes
+        if type(channel) not in [int, float]:
+            channel = channel[0]
         cc[dta]['neuron_topo']['x'][neuron_i] = \
-            int(neuron_i) / 10
+            int(channel) / 10
         cc[dta]['neuron_topo']['y'][neuron_i] = \
-            int(neuron_i) % 10
+            int(channel) % 10
 
         if dta == 'exp':
             cc[dta]['neuron_single_values']['behavior'][neuron_i] = np.array([
@@ -171,13 +175,10 @@ for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
                 2, 2, 2, 0, 0, 0, 3, 3, 3, 3,
                 2, 2, 2, 0, 0, 0, 3, 3, 3, 3,
                 2, 2, 2, 0, 0, 0, 3, 3, 3, 3])[neuron_i]
-        else:
-            cc[dta]['neuron_single_values']['behavior'][neuron_i] = np.zeros(
-                (10, 10))
 
-        cc[dta]['neuron_single_values']['rate'][neuron_i] = rates[dta][neuron_i]
-        cc[dta]['neuron_single_values']['cv'][neuron_i] = cvs[dta][neuron_i]
-        cc[dta]['neuron_single_values']['lv'][neuron_i] = lvs[dta][neuron_i]
+    cc[dta]['neuron_single_values']['rate'] = rates[dta]
+    cc[dta]['neuron_single_values']['cv'] = cvs[dta]
+    cc[dta]['neuron_single_values']['lv'] = lvs[dta]
 
 # values per edge
 num_tasks = len(glob.glob(
@@ -200,12 +201,24 @@ for job_parameter in range(num_tasks):
             cc[dta]['edges']['id_i'][calc_i] = cc_part[dta]['unit_i'][calc_i]
             cc[dta]['edges']['id_j'][calc_i] = cc_part[dta]['unit_j'][calc_i]
 
-            cc[dta]['edge_time_series']['cch'][calc_i] = \
+            if cc[dta]['edge_time_series']['cch'] is None:
+                cc[dta]['edge_time_series']['cch'] = np.zeros(
+                    num_edges, len(cc_part[dta]['times_ms'][calc_i]))
+                cc[dta]['edge_time_series']['sig_upper_975'] = np.zeros(
+                    num_edges, len(cc_part[dta]['times_ms'][calc_i]))
+                cc[dta]['edge_time_series']['sig_lower_25'] = np.zeros(
+                    num_edges, len(cc_part[dta]['times_ms'][calc_i]))
+                cc[dta]['edge_time_series']['times_ms'] = np.zeros(
+                    num_edges, len(cc_part[dta]['times_ms'][calc_i]))
+
+            cc[dta]['edge_time_series']['cch'][calc_i, :] = \
                 cc_part[dta]['original'][calc_i]
-            cc[dta]['edge_time_series']['sig_upper_975'][calc_i] = \
+            cc[dta]['edge_time_series']['sig_upper_975'][calc_i, :] = \
                 cc_part[dta]['surr'][calc_i][975, :]
-            cc[dta]['edge_time_series']['sig_lower_25'][calc_i] = \
+            cc[dta]['edge_time_series']['sig_lower_25'][calc_i, :] = \
                 cc_part[dta]['surr'][calc_i][25, :]
+            cc[dta]['edge_time_series']['times_ms'][calc_i, :] = \
+                cc_part[dta]['times_ms'][calc_i]
 
     del cc_part
 
