@@ -114,7 +114,7 @@ def lv_distribution(lvs, bins=20):
     plt.xlim(bins[0], bins[-1] + bin_width)
 
 
-def cc_distribution(cc_matrix, bins=20):
+def cc_distribution(cc_matrix, bins=20, color='k', opacity=1.):
 
     x = cc_matrix[np.triu_indices(cc_matrix.shape[0], 1)]
 
@@ -125,13 +125,16 @@ def cc_distribution(cc_matrix, bins=20):
         bin_width = bins[1] - bins[0]
     h, b = np.histogram(x, bins, density=True)
 
-    plt.bar(left=b[:-1], height=h, width=bin_width, fc='k')
+    plt.bar(
+        left=b[:-1], height=h, width=bin_width,
+        fc=color, alpha=opacity)
 
     m = np.mean(x)
-    plt.plot([m, m], plt.ylim(), 'b')
+    plt.plot([m, m], plt.ylim(), color)
     plt.axis('tight')
+    # plt.axes().tick_params(axis='both', which='major', labelsize=14)
 
-    plt.xlabel('Correlation Coefficient')
-    plt.ylabel('PDF')
+    plt.xlabel('Correlation Coefficient', fontsize=16)
+    plt.ylabel('PDF', fontsize=16)
 
     plt.xlim(bins[0], bins[-1] + bin_width)
