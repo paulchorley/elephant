@@ -13,7 +13,10 @@ sys.path.insert(1, '../../toolboxes/py/python-neo')
 sys.path.insert(1, '../../toolboxes/py/python-odml')
 sys.path.insert(1, '../../toolboxes/py/csn_toolbox')
 
+import pickle
+
 import numpy as np
+import scipy
 import quantities as pq
 import matplotlib.pyplot as plt
 
@@ -306,85 +309,84 @@ plt.title('Model')
 plots.cc_distribution(cc_matrix_mdl_prec, bins=ccbins)
 
 plt.subplots_adjust(hspace=0.5)
-plt.show()
+# plt.show()
 
 
 # ## Cross-correlograms
 
-num_surrs = 100
-max_lag_bins = 100
-lag_res = 1 * pq.ms
-max_lag = max_lag_bins * lag_res
-smoothing = 10 * pq.ms
+filename = [
+    '../results/hbp_review_task/viz_output_exp.pkl',
+    '../results/hbp_review_task/viz_output_mdl.pkl']
+titles = ['Experiment', 'Model']
 
-num_neurons_exp = len(sts_exp)
-num_ccs = (num_neurons_exp ** 2 - num_neurons_exp) / 2
+plt.figure()
+for i in range(2):
+    # load results
+    f = open(filename[i], 'r')
+    cc = pickle.load(f)
+    f.close()
 
-cc = {}
-cc['original'] = []
-cc['surr'] = []
-cc['original_measure'] = []
-cc['surr_measure'] = []
-cc['pos'] = []
-cc['unit_i'] = []
-cc['unit_j'] = []
+    # example: build correlation matrix
+    num_neurons = cc['meta']['num_neurons']
+    num_edges = cc['meta']['num_edges']
 
-sts = sts_mdl
+    C = np.zeros((num_neurons, num_neurons))
+    x = cc['edges']['id_i'].astype(int)
+    y = cc['edges']['id_j'].astype(int)
+    p = cc['func_conn']['cch_peak']['pvalue'] / 1000.
+    for edge_i in range(num_edges):
+        C[x[edge_i], y[edge_i]] = C[y[edge_i], x[edge_i]] = p[edge_i]
 
-for ni in [0, 1, 2, 3]:  # range(num_neurons_exp):
-    for nj in [0, 1, 2, 3]:  # range(ni, num_neurons_exp):
-        cc['unit_i'].append(ni)
-        cc['unit_j'].append(nj)
-
-        print "Cross-correlating ", ni, " and ", nj
-        cco = elephant.spikecorr.cch(
-            sts[ni], sts[nj], w=lag_res, lag=max_lag, smooth=smoothing)
-        cc['original'].append(cco)
-
-        ind = np.argmin(np.abs(cco.times))
-        ccom = np.sum(cco[ind - 5:ind + 5].magnitude)
-        cc['original_measure'].append(ccom)
-
-        surr_i = elephant.surrogates.spike_dithering(
-            sts[ni], dither=50 * pq.ms, n=num_surrs)
-        surr_j = elephant.surrogates.spike_dithering(
-            sts[nj], dither=50 * pq.ms, n=num_surrs)
-
-        ccs = []
-        ccsm = []
-        for surrogate in range(num_surrs):
-            scc = elephant.spikecorr.cch(
-                surr_i[surrogate], surr_j[surrogate],
-                w=lag_res, lag=max_lag, smooth=smoothing)
-            ccs.append(scc)
-            ccsm.append(np.sum(scc[ind - 5:ind + 5].magnitude))
-        cc['surr'].append(ccs)
-        cc['surr_measure'].append(np.sort(ccsm))
-        cc['pos'].append(np.count_nonzero(np.array(ccsm) >= ccom))
-
-# write parameters to disk
-import h5py_wrapper.wrapper
-h5py_wrapper.wrapper.add_to_h5(
-    'correlation_output.h5', cc, write_mode='w', overwrite_dataset=True)
-
-# plot example CC's
-for selected_unit in range(len(cc['original'])):
-    plt.subplot2grid((4, 4), (cc['unit_i'][selected_unit], cc['unit_j'][selected_unit]))
-    surr_matrix = np.sort(np.array(cc['surr'][selected_unit]), axis=0)
-    plt.plot(cc['original'][selected_unit].times.magnitude, surr_matrix[int(num_surrs * 0.05)], color=[0.3, 0.3, 0.3])
-    plt.plot(cc['original'][selected_unit].times.magnitude, surr_matrix[int(num_surrs * 0.95)], color=[0.3, 0.3, 0.3])
-    plt.plot(cc['original'][selected_unit].times.magnitude, cc['original'][selected_unit].magnitude)
+    ax = plt.subplot(1, 2, i + 1)
+    plt.pcolor(np.arange(num_neurons), np.arange(num_neurons), 1. - C)
+    plt.title(titles[i])
+    plt.xlabel("Neuron ID i")
+    plt.ylabel("Neuron ID j")
     plt.axis('tight')
+    ax.set_aspect('equal', 'datalim')
+    plt.clim(0, 1)
+    plt.colorbar()
 
-    plt.subplot2grid((4, 4), (cc['unit_j'][selected_unit], cc['unit_i'][selected_unit]))
-    plt.plot(cc['original'][selected_unit].times.magnitude, surr_matrix[int(num_surrs * 0.05)], color=[0.3, 0.3, 0.3])
-    plt.plot(cc['original'][selected_unit].times.magnitude, surr_matrix[int(num_surrs * 0.95)], color=[0.3, 0.3, 0.3])
-    plt.plot(cc['original'][selected_unit].times.magnitude, cc['original'][selected_unit].magnitude)
-    plt.axis('tight')
-plt.show()
+plt.figure()
+num_cc_plots = 5
+for i in range(2):
+    # load results
+    f = open(filename[i], 'r')
+    cc = pickle.load(f)
+    f.close()
 
+    # example: build correlation matrix
+    num_neurons = cc['meta']['num_neurons']
+    num_edges = cc['meta']['num_edges']
 
-# ## Higher-order analysis (CuBIC) ?
+    for j in range(num_cc_plots):
+        y = cc['edge_time_series']['cch'][j * 111 + 3, :]
+        x = cc['edge_time_series']['times_ms'][j * 111 + 3, :]
+        s1 = cc['edge_time_series']['sig_upper_975'][j * 111 + 3, :]
+        s2 = cc['edge_time_series']['sig_lower_25'][j * 111 + 3, :]
 
-# In[ ]:
+        n1 = cc['edges']['id_i'][i]
+        n2 = cc['edges']['id_j'][j]
+        x1 = cc['neuron_topo']['x'][n1]
+        y1 = cc['neuron_topo']['y'][n1]
+        x2 = cc['neuron_topo']['x'][n2]
+        y2 = cc['neuron_topo']['y'][n2]
+
+        ax = plt.subplot(num_cc_plots, 2, i + 1 + j * 2)
+        ind = np.argmin(np.abs(x))
+        plt.plot(x[ind - 5:ind + 5], s1, 'g:')
+        plt.plot(x[ind - 5:ind + 5], s2, 'r:')
+        plt.plot(x, y, 'k-')
+        if j == 0:
+            plt.title(titles[i])
+        plt.ylabel(
+            "Cross-correlogram %i (%i,%i) - %i (%i,%i)" %
+            (n1, x1, y1, n2, x2, y2))
+        if j == num_cc_plots - 1:
+            plt.xlabel("time (ms)")
+        else:
+            ax.set_xticklabels([])
+
+        plt.axis('tight')
+
 plt.show()
