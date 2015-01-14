@@ -69,26 +69,26 @@ session_mdl = mesocircuitio.MesoCircuitIO(
     "data/utah_array_spikes_60s.h5", print_diagnostic=False)
 block_mdl = session_mdl.read_block(
     n_starts=[10 * pq.s], n_stops=[10 * pq.s + duration],
-    channel_list=[], layer_list=['L5'],
+    channel_list=[], layer_list=['L4'],
     units=[], unit_type=['excitatory', 'inhibitory'])
 
 # Select one neuron for each channel containing a neuron in experimental data
-# sts_mdl = []
-# for st in sts_exp:
-#    sts_mdl.append(block_mdl.filter(
-#        [{'channel_id':st.annotations['channel_id']}])[0]
-#        )
+sts_mdl = []
+for st in sts_exp:
+    sts_mdl.append(block_mdl.filter(
+        [{'channel_id': st.annotations['ca_id']}])[0])
 
 # Alternative: randomly pick the same number of excitatory units
-sts_mdl = block_mdl.filter(
-    targdict=[{'unit_type': 'excitatory'}, {'unit_id': 0}])
-sts_mdl = [
-    sts_mdl[i] for i in np.linspace(
-        0, len(sts_mdl) - 1, len(sts_exp), dtype=int)]
+# sts_mdl = block_mdl.filter(
+#     targdict=[{'unit_type': 'excitatory'}, {'unit_id': 0}])
+# sts_mdl = [
+#     sts_mdl[i] for i in np.linspace(
+#         0, len(sts_mdl) - 1, len(sts_exp), dtype=int)]
 
 
 for st in sts_mdl:
     st.annotate(use_st=True)
+    st.annotate(ca_id=st.annotations['channel_id'])
 
 print("Number of model spike trains: " + str(len(sts_mdl)))
 
