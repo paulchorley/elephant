@@ -72,12 +72,20 @@ block_mdl = session_mdl.read_block(
     channel_list=[], layer_list=['L5'],
     units=[], unit_type=['excitatory', 'inhibitory'])
 
-# select neuron
+# Select one neuron for each channel containing a neuron in experimental data
+# sts_mdl = []
+# for st in sts_exp:
+#    sts_mdl.append(block_mdl.filter(
+#        [{'channel_id':st.annotations['channel_id']}])[0]
+#        )
+
+# Alternative: randomly pick the same number of excitatory units
 sts_mdl = block_mdl.filter(
     targdict=[{'unit_type': 'excitatory'}, {'unit_id': 0}])
 sts_mdl = [
     sts_mdl[i] for i in np.linspace(
         0, len(sts_mdl) - 1, len(sts_exp), dtype=int)]
+
 
 for st in sts_mdl:
     st.annotate(use_st=True)
