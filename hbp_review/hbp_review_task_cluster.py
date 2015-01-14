@@ -1,6 +1,9 @@
-#==============================================================================
+''' This is a local version of the UP task to calculate all pairwise CCHs and
+their significance based on 1000 spike dither surrogates on the INM cluster'''
+
+# =============================================================================
 # Initialization
-#==============================================================================
+# =============================================================================
 
 # this number relates to the "-t" parameter:
 #   -t 0-X => num_tasks=X+1
@@ -28,64 +31,50 @@ import numpy as np
 import quantities as pq
 
 # provides neo framework and I/Os to load exp and mdl data
-import rg.restingstateio
-import mesocircuitio
+import neo
 
 # provides core analysis library component
 import elephant
 
 
-#==============================================================================
+def cch_measure(cch):
+    ind = np.argmin(np.abs(cch.times))
+    return np.sum(cch[ind - 5:ind + 5].magnitude)
+
+
+# =============================================================================
 # Global variables
-#==============================================================================
+# =============================================================================
 
 # duration of recording to load
 rec_start = 10.*pq.s
 duration = 50.*pq.s
 
 
-#==============================================================================
+# =============================================================================
 # Load experimental data
-#==============================================================================
+# =============================================================================
 
-# data should be in a subdirectory 'data' relative to this notebook's location
-# Load only first unit (ID: 1) of each channel
+filename = 'data/experiment.h5'
+session = neo.NeoHdf5IO(filename=filename)
+block = session.read_block()
 
-session_exp = rg.restingstateio.RestingStateIO(
-    "data/i140701-004", print_diagnostic=False)
-block_exp = session_exp.read_block(
-    n_starts=[rec_start], n_stops=[rec_start + duration],
-    channel_list=[], units=[1])
-
-# select spike trains (min. 2 spikes, SUA only)
-sts_exp = [
-    st for st in
-    block_exp.filter(sua=True, object="SpikeTrain") if len(st) > 2]
+# select spike trains
+sts_exp = block.filter(use_st=True)
 
 print("Number of experimental spike trains: " + str(len(sts_exp)))
 
 
-#==============================================================================
+# =============================================================================
 # Load simulation data
-#==============================================================================
+# =============================================================================
 
-# data should be in a subdirectory 'data' relative to this notebook's location
-# Load only first unit (ID: 0) of each channel (one exc., one inh.)
-# Load layer 5
-session_mdl = mesocircuitio.MesoCircuitIO(
-    "data/utah_array_spikes_60s.h5", print_diagnostic=False)
-block_mdl = session_mdl.read_block(
-    n_starts=[10 * pq.s], n_stops=[10 * pq.s + duration],
-    channel_list=[], layer_list=['L5'],
-    units=[], unit_type=['excitatory', 'inhibitory'])
+filename = 'data/model.h5'
+session = neo.NeoHdf5IO(filename=filename)
+block = session.read_block()
 
-# select random excitatory and inhibitory neurons
-# idx = np.random.permutation(range(len(block_mdl.segments[0].spiketrains)))
-# sts_mdl = [block_mdl.segments[0].spiketrains[i] for i in idx[:len(sts_exp)]]
-
-# select neuron
-sts_mdl = block_mdl.filter(
-    targdict=[{'unit_type': 'excitatory'}, {'unit_id': 0}])[:len(sts_exp)]
+# select spike trains
+sts_mdl = block.filter(use_st=True)
 
 print("Number of model spike trains: " + str(len(sts_mdl)))
 
@@ -130,9 +119,6 @@ task_stop_idx = idx[1:]
 print("Task Nr.: %i" % job_parameter)
 print("Number of tasks: %i" % num_tasks)
 
-def cch_measure(cch):
-    return np.sum(cch[ind - 5:ind + 5].magnitude)
-
 for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
     for calc_i in range(
             task_starts_idx[job_parameter], task_stop_idx[job_parameter]):
@@ -152,7 +138,6 @@ for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
         cc[dta]['times_ms'][calc_i] = cco.times.rescale(pq.ms).magnitude
 
         # extract measure
-        ind = np.argmin(np.abs(cco.times))
         ccom = cch_measure(cco)
         cc[dta]['original_measure'][calc_i] = ccom
 
@@ -170,7 +155,7 @@ for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
             ccs.append(scc.magnitude)
             ccsm.append(cch_measure(scc))
         cc[dta]['surr'][calc_i] = np.array(ccs)
-        cc[dta]['surr_measure'][calc_i] = np.sort(ccsm)
+        cc[dta]['surr_measure'][calc_i] = ccsm
         cc[dta]['pvalue'][calc_i] = np.count_nonzero(np.array(ccsm) >= ccom)
 
 # write parameters to disk

@@ -84,13 +84,11 @@ block_mdl = session_mdl.read_block(
     channel_list=[], layer_list=['L5'],
     units=[], unit_type=['excitatory', 'inhibitory'])
 
-# select random excitatory and inhibitory neurons
-# idx = np.random.permutation(range(len(block_mdl.segments[0].spiketrains)))
-# sts_mdl = [block_mdl.segments[0].spiketrains[i] for i in idx[:len(sts_exp)]]
-
-# select neuron
 sts_mdl = block_mdl.filter(
-    unit_type='excitatory', unit_id=0, object="SpikeTrain")[:len(sts_exp)]
+    targdict=[{'unit_type': 'excitatory'}, {'unit_id': 0}])
+sts_mdl = [
+    sts_mdl[i] for i in np.linspace(
+        0, len(sts_mdl) - 1, len(sts_exp), dtype=int)]
 
 print("Number of model spike trains: " + str(len(sts_mdl)))
 

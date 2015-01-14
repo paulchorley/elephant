@@ -215,10 +215,13 @@ def corrcoef_continuous(sts, coinc_width):
         raise ValueError(
             "All spike trains must have common t_start and t_stop.")
 
-    num_bins = np.ceil(
+#     num_bins = np.ceil(
+#         (t_stop.rescale(coinc_width.units) -
+#             t_start.rescale(coinc_width.units)) /
+#         coinc_width).magnitude
+    num_bins = (
         (t_stop.rescale(coinc_width.units) -
-            t_start.rescale(coinc_width.units)) /
-        coinc_width).magnitude
+            t_start.rescale(coinc_width.units)) / coinc_width).magnitude
     num_neuron = len(sts)
 
     # Rescale all spike trains the resolution of the bin width
@@ -229,34 +232,34 @@ def corrcoef_continuous(sts, coinc_width):
 
     # First calculate unnormalised values
     for i, sts_i in enumerate(sts_rescale):
-        for j, sts_j in enumerate(sts_rescale[i:],i):
+        for j, sts_j in enumerate(sts_rescale[i:], i):
 
-            print "Counting",i,j
+            print "Counting", i, j
 
             # v1: calculate the whole matrix (memory hungry)
-            #C[i,j] = np.count_nonzero(np.abs(np.subtract.outer(
+            # C[i,j] = np.count_nonzero(np.abs(np.subtract.outer(
             #            sts_i, sts_j)) < coinc_width.magnitude)
 
-            #v2: calculate spike at a time
-            #for s in sts_i:
-            #    C[i,j] += np.count_nonzero( np.abs(sts_j-s) < 
+            # v2: calculate spike at a time
+            # for s in sts_i:
+            #    C[i,j] += np.count_nonzero( np.abs(sts_j-s) <
             #                                coinc_width.magnitude)
 
             # v3: incrementally reduce the comparitor
             dt = np.array(sts_j)
             prev = 0
             for t in sts_i:
-                dt -= (t-prev)
+                dt -= (t - prev)
                 prev = t
-                C[i,j] += np.count_nonzero( 
-                    np.abs(dt) < coinc_width.magnitude )
+                C[i, j] += np.count_nonzero(
+                    np.abs(dt) < coinc_width.magnitude)
 
     # Normalise all off-diagonal pairs
     for i, sts_i in enumerate(sts_rescale):
-        for j, sts_j in enumerate(sts_rescale[i+1:],i+1):
+        for j, sts_j in enumerate(sts_rescale[i + 1:], i + 1):
 
             # Precomputed value (to be normalised)
-            ij = C[i,j]
+            ij = C[i, j]
 
             # Number of spikes in i and j
             n_i = len(sts_i)
@@ -276,8 +279,8 @@ def corrcoef_continuous(sts, coinc_width):
             #       = <b_i, b_i> + m_i^2 - 2 <b_i, M_i>
             #       =:    ii     + m_i^2 - 2 n_i * m_i   $$
             cc_denom = np.sqrt(
-                (C[i,i] - n_i ** 2 / num_bins) *
-                (C[j,j] - n_j ** 2 / num_bins))
+                (C[i, i] - n_i ** 2 / num_bins) *
+                (C[j, j] - n_j ** 2 / num_bins))
 
             # Fill entry of correlation matrix
             C[i, j] = C[j, i] = cc_enum / cc_denom
@@ -286,7 +289,7 @@ def corrcoef_continuous(sts, coinc_width):
     for i, sts_i in enumerate(sts_rescale):
 
         # Precomputed value (to be normalised)
-        ii = C[i,i]
+        ii = C[i, i]
 
         # Number of spikes in i
         n_i = len(sts_i)
@@ -298,7 +301,7 @@ def corrcoef_continuous(sts, coinc_width):
         # where $n_i$ is the spike count of spike train $i$,
         # $l$ is the number of bins used (i.e., length of $b_i$),
         # and $M_i$ is a vector [m_i, m_i,..., m_i].
-        cc_enum = ii - n_i**2 / num_bins
+        cc_enum = ii - n_i ** 2 / num_bins
 
         # Denominator:
         # $$ <b_i-m_i, b_i-m_i>
@@ -820,7 +823,7 @@ def ccht2(x, y, binsize, corrected=False, smooth=0, normed=False,
         cch()
 
     """
-    import np
+    import numpy as np
 
     # Convert the inputs to arrays
     if type(x) == list:

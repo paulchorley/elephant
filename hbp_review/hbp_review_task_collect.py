@@ -1,6 +1,9 @@
-#==============================================================================
+'''This script collects the results of individual runs of hbp_review_task, and
+assembles a single, compressed result file (with some additional info'''
+
+# =============================================================================
 # Initialization
-#==============================================================================
+# =============================================================================
 
 # paths
 import sys
@@ -14,13 +17,13 @@ sys.path.insert(1, '../../toolboxes/py/csn_toolbox')
 
 import os
 import glob
+import pickle
 
 import numpy as np
 import quantities as pq
 
 # provides neo framework and I/Os to load exp and mdl data
-import rg.restingstateio
-import mesocircuitio
+import neo
 
 # provides core analysis library component
 import elephant
@@ -28,31 +31,29 @@ import elephant
 import h5py_wrapper.wrapper
 
 
-#==============================================================================
+def cch_measure(cch, times):
+    ind = np.argmin(np.abs(times))
+    return np.sum(cch[ind - 5:ind + 5])
+
+# =============================================================================
 # Global variables
-#==============================================================================
+# =============================================================================
 
 # duration of recording to load
 rec_start = 10.*pq.s
 duration = 50.*pq.s
 
 
-#==============================================================================
+# =============================================================================
 # Load experimental data
-#==============================================================================
+# =============================================================================
 
-# data should be in a subdirectory 'data' relative to this notebook's location
-# Load only first unit (ID: 1) of each channel
-session_exp = rg.restingstateio.RestingStateIO(
-    "data/i140701-004", print_diagnostic=False)
-block_exp = session_exp.read_block(
-    n_starts=[rec_start], n_stops=[rec_start + duration],
-    channel_list=[], units=[1])
+filename = 'data/experiment.h5'
+session = neo.NeoHdf5IO(filename=filename)
+block = session.read_block()
 
-# select spike trains (min. 2 spikes, SUA only)
-sts_exp = [
-    st for st in
-    block_exp.filter(sua=True, object="SpikeTrain") if len(st) > 2]
+# select spike trains
+sts_exp = block.filter(use_st=True)
 
 print("Number of experimental spike trains: " + str(len(sts_exp)))
 
@@ -61,45 +62,38 @@ sts_exp_bin = elephant.conversion.Binned(
     sts_exp, binsize=20 * pq.ms,
     t_start=rec_start, t_stop=rec_start + duration)
 
+num_neurons = len(sts_exp)
 
-#==============================================================================
+# =============================================================================
 # Load simulation data
-#==============================================================================
+# =============================================================================
 
-# data should be in a subdirectory 'data' relative to this notebook's location
-# Load only first unit (ID: 0) of each channel (one exc., one inh.)
-# Load layer 5
-session_mdl = mesocircuitio.MesoCircuitIO(
-    "data/utah_array_spikes_60s.h5", print_diagnostic=False)
-block_mdl = session_mdl.read_block(
-    n_starts=[10 * pq.s], n_stops=[10 * pq.s + duration],
-    channel_list=[], layer_list=['L5'],
-    units=[], unit_type=['excitatory', 'inhibitory'])
+filename = 'data/model.h5'
+session = neo.NeoHdf5IO(filename=filename)
+block = session.read_block()
 
-# select neuron
-sts_mdl = block_mdl.filter(
-    targdict=[{'unit_type': 'excitatory'}, {'unit_id': 0}])[:len(sts_exp)]
+# select spike trains
+sts_mdl = block.filter(use_st=True)
 
 print("Number of model spike trains: " + str(len(sts_mdl)))
 
-for st in sts_mdl:
-    print st.annotations,
-    print st.unit.channel_indexes
 # create binned spike trains
 sts_mdl_bin = elephant.conversion.Binned(
     sts_mdl, binsize=20 * pq.ms,
     t_start=rec_start, t_stop=rec_start + duration)
 
-num_neurons = len(sts_exp)
 
-
-#==============================================================================
+# =============================================================================
 # Calculate measures
-#==============================================================================
+# =============================================================================
 
 rates = {}
-rates['exp'] = [elephant.statistics.mean_firing_rate(st).rescale("Hz").magnitude for st in sts_exp]
-rates['mdl'] = [elephant.statistics.mean_firing_rate(st).rescale("Hz").magnitude for st in sts_mdl]
+rates['exp'] = [
+    elephant.statistics.mean_firing_rate(st).rescale("Hz").magnitude
+    for st in sts_exp]
+rates['mdl'] = [
+    elephant.statistics.mean_firing_rate(st).rescale("Hz").magnitude
+    for st in sts_mdl]
 
 isis_exp = [elephant.statistics.isi(st) for st in sts_exp]
 isis_mdl = [elephant.statistics.isi(st) for st in sts_mdl]
@@ -113,9 +107,9 @@ lvs['exp'] = [elephant.statistics.lv(isi) for isi in isis_exp]
 lvs['mdl'] = [elephant.statistics.lv(isi) for isi in isis_mdl]
 
 
-#==============================================================================
+# =============================================================================
 # Rewrite files
-#==============================================================================
+# =============================================================================
 
 num_edges = 0
 for ni in range(num_neurons):
@@ -159,13 +153,14 @@ for dta in ['exp', 'mdl']:
 for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
     for neuron_i in range(num_neurons):
         channel = sts[neuron_i].unit.channel_indexes
+        lin_channel = sts[neuron_i].unit.annotations('ca_id')
         if type(channel) not in [int, float]:
             channel = channel[0]
         cc[dta]['neuron_topo']['x'][neuron_i] = \
-            int(channel) / 10
+            int(lin_channel) / 10
         cc[dta]['neuron_topo']['y'][neuron_i] = \
-            int(channel) % 10
-        print channel
+            int(lin_channel) % 10
+        print lin_channel
 
         if dta == 'exp':
             cc[dta]['neuron_single_values']['behavior'][neuron_i] = np.array([
@@ -199,7 +194,11 @@ for job_parameter in range(num_tasks):
 
     for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
         for calc_i in cc_part[dta]['pvalue']:
-            print("Processing %s-%i (%i,%i)" % (dta, calc_i, cc_part[dta]['unit_i'][calc_i], cc_part[dta]['unit_j'][calc_i]))
+            print(
+                "Processing %s-%i (%i,%i)" %
+                (dta, calc_i,
+                    cc_part[dta]['unit_i'][calc_i],
+                    cc_part[dta]['unit_j'][calc_i]))
             cc[dta]['func_conn']['cch_peak']['pvalue'][calc_i] = \
                 cc_part[dta]['pvalue'][calc_i]
 
@@ -216,12 +215,19 @@ for job_parameter in range(num_tasks):
                 cc[dta]['edge_time_series']['times_ms'] = np.zeros((
                     num_edges, len(cc_part[dta]['times_ms'][calc_i])))
 
+            # remove if not required anymore!
+            ccm = np.zeros(cc_part[dta]['surr'][calc_i].shape[0])
+            for xi in range(cc_part[dta]['surr'][calc_i].shape[0]):
+                ccm[xi] = cch_measure(
+                    cc_part[dta]['surr'][calc_i][xi, :],
+                    cc_part[dta]['times_ms'][calc_i])
+            smas = np.argsort(ccm)
             cc[dta]['edge_time_series']['cch'][calc_i, :] = \
                 cc_part[dta]['original'][calc_i]
             cc[dta]['edge_time_series']['sig_upper_975'][calc_i, :] = \
-                cc_part[dta]['surr'][calc_i][975, :]
+                cc_part[dta]['surr'][calc_i][smas[975], :]
             cc[dta]['edge_time_series']['sig_lower_25'][calc_i, :] = \
-                cc_part[dta]['surr'][calc_i][25, :]
+                cc_part[dta]['surr'][calc_i][smas[25], :]
             cc[dta]['edge_time_series']['times_ms'][calc_i, :] = \
                 cc_part[dta]['times_ms'][calc_i]
 
@@ -235,9 +241,24 @@ h5py_wrapper.wrapper.add_to_h5(
     filename,
     cc['exp'], write_mode='w', overwrite_dataset=True)
 
+filename = '../results/hbp_review_task/viz_output_exp.pkl'
+if os.path.exists(filename):
+    os.remove(filename)
+f = open(filename, 'w')
+pickle.dump(cc['exp'], f)
+f.close()
+
+
 filename = '../results/hbp_review_task/viz_output_mdl.h5'
 if os.path.exists(filename):
     os.remove(filename)
 h5py_wrapper.wrapper.add_to_h5(
     filename,
     cc['mdl'], write_mode='w', overwrite_dataset=True)
+
+filename = '../results/hbp_review_task/viz_output_mdl.pkl'
+if os.path.exists(filename):
+    os.remove(filename)
+f = open(filename, 'w')
+pickle.dump(cc['mdl'], f)
+f.close()

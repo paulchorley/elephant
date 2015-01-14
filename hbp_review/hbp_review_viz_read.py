@@ -4,17 +4,30 @@ import collections
 import re
 from subprocess import call
 import h5py
-if int(re.sub('\.', '', h5py.version.version)) < 230 :
-    raise ImportError("Using h5py version %s. Version must be >= 2.3.0" % (h5py.version.version))
+if int(re.sub('\.', '', h5py.version.version)) < 230:
+    raise ImportError(
+        "Using h5py version %s. Version must be >= 2.3.0" %
+        (h5py.version.version))
 import ast
+import pickle
+import matplotlib.pyplot as plt
 
-#==============================================================================
-# HDF5 load code
-#==============================================================================
+# =============================================================================
+# See below for main code on loading the data
+#   |
+#   |
+#   |
+#   V
+# =============================================================================
+
+# =============================================================================
+# HDF5 load code -- not required for pickle loading
+# =============================================================================
 
 # Auxiliary functions
 
-def delete_group(f, group) :
+
+def delete_group(f, group):
     try:
         f = h5py.File(f, 'r+')
         try:
@@ -25,6 +38,7 @@ def delete_group(f, group) :
     except IOError:
         pass
 
+
 def node_exists(f, key):
     f = h5py.File(f, 'r')
     exist = key in f
@@ -32,25 +46,27 @@ def node_exists(f, key):
     return exist
 
 
-def dict_to_h5(d, f, overwrite_dataset, compression=None, **keywords) :
-    if 'parent_group' in keywords :
+def dict_to_h5(d, f, overwrite_dataset, compression=None, **keywords):
+    if 'parent_group' in keywords:
         parent_group = keywords['parent_group']
     else:
         parent_group = f.parent
 
-    for k, v in d.items() :
-        if isinstance(v, collections.MutableMapping) :
+    for k, v in d.items():
+        if isinstance(v, collections.MutableMapping):
             if parent_group.name != '/':
                 group_name = parent_group.name + '/' + str(k)
             else:
                 group_name = parent_group.name + str(k)
             group = f.require_group(group_name)
-            dict_to_h5(v, f, overwrite_dataset, parent_group=group, compression=compression)
+            dict_to_h5(
+                v, f,
+                overwrite_dataset, parent_group=group, compression=compression)
         else:
-            if not str(k) in parent_group.keys() :
+            if not str(k) in parent_group.keys():
                 create_dataset(parent_group, k, v, compression=compression)
             else:
-                if overwrite_dataset == True:
+                if overwrite_dataset is True:
                     del parent_group[str(k)]  # delete the dataset
                     create_dataset(parent_group, k, v, compression=compression)
                 else:
@@ -60,8 +76,9 @@ def dict_to_h5(d, f, overwrite_dataset, compression=None, **keywords) :
 
 def create_dataset(parent_group, k, v, compression=None):
     shp = numpy.shape(v)
-    if v == None:
-        parent_group.create_dataset(str(k), data='None', compression=compression)
+    if v is None:
+        parent_group.create_dataset(
+            str(k), data='None', compression=compression)
     else:
         if isinstance(v, (list, numpy.ndarray)):
                 if numpy.array(v).dtype.name == 'object':
@@ -73,18 +90,22 @@ def create_dataset(parent_group, k, v, compression=None):
                         # this does not work in 3d!
                         oldshape = numpy.array([len(x) for x in v])
                         data_reshaped = numpy.hstack(v)
-                        data_set = parent_group.create_dataset(str(k), data=data_reshaped, compression=compression)
+                        data_set = parent_group.create_dataset(
+                            str(k), data=data_reshaped,
+                            compression=compression)
                         data_set.attrs['oldshape'] = oldshape
                         data_set.attrs['custom_shape'] = True
-                elif isinstance(v, pq.Quantity) :
+                elif isinstance(v, pq.Quantity):
                     data_set = parent_group.create_dataset(str(k), data=v)
                     data_set.attrs['_unit'] = v.dimensionality.string
-                else :
-                    data_set = parent_group.create_dataset(str(k), data=v, compression=compression)
-        elif isinstance(v, (int, float)) :  # ## ignore compression argument for scalar datasets
+                else:
+                    data_set = parent_group.create_dataset(
+                        str(k), data=v, compression=compression)
+        elif isinstance(v, (int, float)):
             data_set = parent_group.create_dataset(str(k), data=v)
         else:
-            data_set = parent_group.create_dataset(str(k), data=v, compression=compression)
+            data_set = parent_group.create_dataset(
+                str(k), data=v, compression=compression)
 
         # ## Explicitely store type of key
         _key_type = type(k).__name__
@@ -214,29 +235,67 @@ def load_h5(filename, path='') :
     f.close()
     return d
 
+# END OF HDF5 LOADING CODE
 
-#==============================================================================
-# Loading starts here
-#==============================================================================
 
-filename = '../results/hbp_review_task/viz_output_mdl.h5'
-cc = load_h5(filename)
+
+# =============================================================================
+# Actual loading starts here
+# =============================================================================
+
+# HDF5 Version
+# filename = '../results/hbp_review_task/viz_output_exp.h5'
+# # filename = '../results/hbp_review_task/viz_output_mdl.h5'
+# cc = load_h5(filename)
+
+# pickle Version
+filename = '../results/hbp_review_task/viz_output_exp.pkl'
+filename = '../results/hbp_review_task/viz_output_mdl.pkl'
+f = open(filename, 'r')
+cc = pickle.load(f)
+f.close()
 
 # example: build correlation matrix
 num_neurons = cc['meta']['num_neurons']
+print("Neurons: %i" % num_neurons)
+num_edges = cc['meta']['num_edges']
+print("Edges: %i" % num_edges)
+
 C = numpy.zeros((num_neurons, num_neurons))
-for edge_i, p_i in cc['func_conn']['cch']['pvalue']:
-    x = cc['edges']['id_i'][edge_i]
-    y = cc['edges']['id_j'][edge_i]
-    C[x, y] = C[y, x] = p_i
+x = cc['edges']['id_i'].astype(int)
+y = cc['edges']['id_j'].astype(int)
+p = cc['func_conn']['cch_peak']['pvalue'] / 1000.
+for edge_i in range(num_edges):
+    C[x[edge_i], y[edge_i]] = C[y[edge_i], x[edge_i]] = p[edge_i]
 
-# example: build 10x10 matrix of firing rates (assuming one neuron per x,y coordinate)
+plt.figure()
+plt.pcolor(numpy.arange(num_neurons), numpy.arange(num_neurons), C)
+plt.suptitle("Correlation matrix")
+plt.xlabel("Neuron ID i")
+plt.ylabel("Neuron ID j")
+plt.axis('tight')
+plt.show()
+
+# example: build 10x10 matrix of firing rates (assuming only one neuron per x,y
+# coordinate)
 T = numpy.zeros((10, 10))
+x = cc['neuron_topo']['x'].astype(int)
+y = cc['neuron_topo']['y'].astype(int)
 for neuron_i in range(num_neurons):
-    x = cc['neuron_topo']['x'][neuron_i]
-    y = cc['neuron_topo']['y'][neuron_i]
-    T[x, y] = cc['neuron_single_values']['rate'][neuron_i]
+    T[x[neuron_i], y[neuron_i]] = cc['neuron_single_values']['rate'][neuron_i]
 
+plt.figure()
+plt.pcolor(numpy.arange(11), numpy.arange(11), T)
+plt.suptitle("Rate distribution on 10x10 array")
+plt.xlabel("X (400 um)")
+plt.ylabel("Y (400 um)")
+plt.colorbar()
+plt.axis('tight')
+plt.show()
+
+
+# Memo: Structure of the cc dictionary:
+# =====================================
 # cc = {}
 #
 # cc['meta'] = {}
@@ -244,27 +303,27 @@ for neuron_i in range(num_neurons):
 # cc['meta']['num_edges'] <- one value
 #
 # cc['neuron_topo'] = {}
-# cc['neuron_topo']['x'] = {} <- one entry for each neuron ID
-# cc['neuron_topo']['y'] = {} <- one entry for each neuron ID
-# cc['neuron_topo']'behavioral']['c'] = {} <- one entry for each neuron ID
+# cc['neuron_topo']['x']  <- one entry for each neuron ID
+# cc['neuron_topo']['y']  <- one entry for each neuron ID
 #
 # cc['func_conn'] = {}
 # cc['func_conn']['cch_peak'] = {}
-# cc['func_conn']['cch_peak']['pvalue'] = {} <- one entry for each edge
+# cc['func_conn']['cch_peak']['pvalue'] <- one entry for each edge
 #
 # cc['edges'] = {}
-# cc['edges']['id_i'] = {} <- one entry for each edge
-# cc['edges']['id_j'] = {} <- one entry for each edge
+# cc['edges']['id_i'] <- one entry for each edge
+# cc['edges']['id_j'] <- one entry for each edge
 #
 # cc['neuron_single_values'] = {}
-# cc['neuron_single_values']['rate'] = {} <- one entry for each neuron ID
-# cc['neuron_single_values']['cv'] = {} <- one entry for each neuron ID
-# cc['neuron_single_values']['lv'] = {} <- one entry for each neuron ID
-# cc['neuron_single_values']['behavior'] = {} <- one entry for each neuron ID
+# cc['neuron_single_values']['rate'] <- one entry for each neuron ID
+# cc['neuron_single_values']['cv'] = {} one entry for each neuron ID
+# cc['neuron_single_values']['lv'] = {} one entry for each neuron ID
+# cc['neuron_single_values']['behavior'] = {} one entry for each neuron ID
 #
 # cc['edge_time_series'] = {}
-# cc['edge_time_series']['cch'] = {} <- one entry for each edge
-# cc['edge_time_series']['sig_upper_975'] = {} <- one entry for each edge
-# cc['edge_time_series']['sig_lower_25'] = {} <- one entry for each edge
+# cc['edge_time_series']['cch'] -> num_edges x len_time_series
+# cc['edge_time_series']['sig_upper_975'] -> num_edges x len_time_series
+# cc['edge_time_series']['sig_lower_25'] -> num_edges x len_time_series
+# cc['edge_time_series']['times_ms'] -> num_edges x len_time_series
 #
 
