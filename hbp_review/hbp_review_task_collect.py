@@ -7,6 +7,7 @@ assembles a single, compressed result file (with some additional info'''
 
 # paths
 import sys
+
 # to find our "special" elephant
 sys.path.insert(1, '..')
 # change this to point to your reachgrasp IO
@@ -153,14 +154,13 @@ for dta in ['exp', 'mdl']:
 for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
     for neuron_i in range(num_neurons):
         channel = sts[neuron_i].unit.channel_indexes
-        lin_channel = sts[neuron_i].unit.annotations('ca_id')
-        if type(channel) not in [int, float]:
+        if type(channel) not in [int, float] and channel is not None:
             channel = channel[0]
+        lin_channel = sts[neuron_i].unit.annotations['ca_id']
         cc[dta]['neuron_topo']['x'][neuron_i] = \
             int(lin_channel) / 10
         cc[dta]['neuron_topo']['y'][neuron_i] = \
             int(lin_channel) % 10
-        print lin_channel
 
         if dta == 'exp':
             cc[dta]['neuron_single_values']['behavior'][neuron_i] = np.array([

@@ -89,6 +89,7 @@ for st in sts_exp:
 for st in sts_mdl:
     st.annotate(use_st=True)
     st.annotate(ca_id=st.annotations['channel_id'])
+    st.unit.annotate(ca_id=st.annotations['channel_id'])
 
 print("Number of model spike trains: " + str(len(sts_mdl)))
 
