@@ -69,7 +69,7 @@ session_mdl = mesocircuitio.MesoCircuitIO(
     "data/utah_array_spikes_60s.h5", print_diagnostic=False)
 block_mdl = session_mdl.read_block(
     n_starts=[10 * pq.s], n_stops=[10 * pq.s + duration],
-    channel_list=[], layer_list=['L4'],
+    channel_list=[], layer_list=['L5'],
     units=[], unit_type=['excitatory', 'inhibitory'])
 
 # Select one neuron for each channel containing a neuron in experimental data
