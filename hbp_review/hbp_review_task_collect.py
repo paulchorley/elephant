@@ -1,5 +1,8 @@
-'''This script collects the results of individual runs of hbp_review_task, and
-assembles a single, compressed result file (with some additional info'''
+'''
+This script collects the results of individual runs of hbp_review_task (run
+either on UP or locally), and assembles a single, compressed result file (with
+some additional info).
+'''
 
 # =============================================================================
 # Initialization

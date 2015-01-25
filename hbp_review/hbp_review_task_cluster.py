@@ -1,5 +1,7 @@
-''' This is a local version of the UP task to calculate all pairwise CCHs and
-their significance based on 1000 spike dither surrogates on the INM cluster'''
+'''
+This is a local version of the UP task to calculate all pairwise CCHs and their
+significance based on 1000 spike dither surrogates on the PBS based cluster.
+'''
 
 # =============================================================================
 # Initialization

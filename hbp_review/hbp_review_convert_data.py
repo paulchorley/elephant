@@ -1,6 +1,12 @@
-'''This script load experimental and simulated data, selects  the spike trains
-to use in each for analysis, marks these with the annotation "use_st'=True, and
-finally saves the modified Neo Block as hdf5 for use in the UP task'''
+'''
+This script load experimental and simulated data, selects the spike trains to
+use in each for analysis, marks these with the annotation "use_st'=True.
+Finally, it saves the modified Neo Block as hdf5 for use, e.g., in the UP task.
+
+The underlying idea is that in this process, data and meta data are combined
+via the custom IOs (experiment: reachgrasp IO based on Neo's Blackrock IO;
+model: mesocircuitio), and the result is saved in a common Neo format.
+'''
 
 # =============================================================================
 # Initialization

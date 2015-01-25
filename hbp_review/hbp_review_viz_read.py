@@ -1,3 +1,11 @@
+'''
+This script is an example of how to read the results in the first version of
+the analysis-visualization file exchange format for functional connectivity
+analysis based on CCH significances.
+
+It currently contains deals with hdf5 and pickle versions of the saved data.
+'''
+
 import numpy
 import quantities as pq
 import collections
