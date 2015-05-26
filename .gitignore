@@ -10,3 +10,7 @@
 *.h5f
 *.hdf
 *.h5
+*.npy
+*.nev
+*.ns2
+hbp_review/data
