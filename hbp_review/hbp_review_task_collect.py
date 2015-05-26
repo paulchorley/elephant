@@ -35,9 +35,9 @@ import elephant
 import h5py_wrapper.wrapper
 
 
-def cch_measure(cch, times):
+def cch_measure(cch_all_pairs, times):
     ind = np.argmin(np.abs(times))
-    return np.sum(cch[ind - 5:ind + 5])
+    return np.sum(cch_all_pairs[ind - 5:ind + 5])
 
 # =============================================================================
 # Global variables
@@ -145,7 +145,7 @@ for dta in ['exp', 'mdl']:
     cc[dta]['neuron_single_values']['behavior'] = np.zeros(num_neurons)
 
     cc[dta]['edge_time_series'] = {}
-    cc[dta]['edge_time_series']['cch'] = None
+    cc[dta]['edge_time_series']['cch_all_pairs'] = None
     cc[dta]['edge_time_series']['sig_upper_975'] = None
     cc[dta]['edge_time_series']['sig_lower_25'] = None
     cc[dta]['edge_time_series']['times_ms'] = None
@@ -208,8 +208,8 @@ for job_parameter in range(num_tasks):
             cc[dta]['edges']['id_i'][calc_i] = cc_part[dta]['unit_i'][calc_i]
             cc[dta]['edges']['id_j'][calc_i] = cc_part[dta]['unit_j'][calc_i]
 
-            if cc[dta]['edge_time_series']['cch'] is None:
-                cc[dta]['edge_time_series']['cch'] = np.zeros((
+            if cc[dta]['edge_time_series']['cch_all_pairs'] is None:
+                cc[dta]['edge_time_series']['cch_all_pairs'] = np.zeros((
                     num_edges, len(cc_part[dta]['times_ms'][calc_i])))
                 cc[dta]['edge_time_series']['sig_upper_975'] = np.zeros((
                     num_edges, len(cc_part[dta]['times_ms'][calc_i])))
@@ -225,7 +225,7 @@ for job_parameter in range(num_tasks):
                     cc_part[dta]['surr'][calc_i][xi, :],
                     cc_part[dta]['times_ms'][calc_i])
             smas = np.argsort(ccm)
-            cc[dta]['edge_time_series']['cch'][calc_i, :] = \
+            cc[dta]['edge_time_series']['cch_all_pairs'][calc_i, :] = \
                 cc_part[dta]['original'][calc_i]
             cc[dta]['edge_time_series']['sig_upper_975'][calc_i, :] = \
                 cc_part[dta]['surr'][calc_i][smas[975], :]

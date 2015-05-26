@@ -100,7 +100,7 @@ def crosscorrelogram_task(inputdata, number_of_jobs, job_id):
         print("Cross-correlating %i and %i" % (ni, nj))
 
         # original CCH
-        cco = elephant.spikecorr.cch(
+        cco = elephant.spike_train_correlation.cch_all_pairs(
             sts[ni], sts[nj], w=lag_res, lag=max_lag, smooth=smoothing)
         cc['original'][calc_i] = cco.magnitude
         cc['times_ms'][calc_i] = cco.times.rescale(pq.ms).magnitude
@@ -120,7 +120,7 @@ def crosscorrelogram_task(inputdata, number_of_jobs, job_id):
 
         # cross-correlogram of each surrogate pair
         for surrogate in range(num_surrs):
-            scc = elephant.spikecorr.cch(
+            scc = elephant.spike_train_correlation.cch_all_pairs(
                 surr_i[surrogate], surr_j[surrogate],
                 w=lag_res, lag=max_lag, smooth=smoothing)
             ccs.append(scc.magnitude)
@@ -143,8 +143,8 @@ def crosscorrelogram_task(inputdata, number_of_jobs, job_id):
     #     cc, write_mode='w', overwrite_dataset=True)
 
 
-def cch_measure(cch, ind):
-    return np.sum(cch[ind - 5:ind + 5].magnitude)
+def cch_measure(cch_all_pairs, ind):
+    return np.sum(cch_all_pairs[ind - 5:ind + 5].magnitude)
 
 
 def export_hdf5(cc, outputname):

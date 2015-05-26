@@ -39,9 +39,9 @@ import neo
 import elephant
 
 
-def cch_measure(cch):
-    ind = np.argmin(np.abs(cch.times))
-    return np.sum(cch[ind - 5:ind + 5].magnitude)
+def cch_measure(cch_all_pairs):
+    ind = np.argmin(np.abs(cch_all_pairs.times))
+    return np.sum(cch_all_pairs[ind - 5:ind + 5].magnitude)
 
 
 # =============================================================================
@@ -134,7 +134,7 @@ for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
         print("Cross-correlating %i and %i" % (ni, nj))
 
         # original CCH
-        cco = elephant.spikecorr.cch(
+        cco = elephant.spike_train_correlation.cch_all_pairs(
             sts[ni], sts[nj], w=lag_res, lag=max_lag, smooth=smoothing)
         cc[dta]['original'][calc_i] = cco.magnitude
         cc[dta]['times_ms'][calc_i] = cco.times.rescale(pq.ms).magnitude
@@ -151,7 +151,7 @@ for dta, sts in zip(['exp', 'mdl'], [sts_exp, sts_mdl]):
         ccs = []
         ccsm = []
         for surrogate in range(num_surrs):
-            scc = elephant.spikecorr.cch(
+            scc = elephant.spike_train_correlation.cch_all_pairs(
                 surr_i[surrogate], surr_j[surrogate],
                 w=lag_res, lag=max_lag, smooth=smoothing)
             ccs.append(scc.magnitude)

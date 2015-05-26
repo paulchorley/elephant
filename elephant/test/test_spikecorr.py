@@ -14,7 +14,7 @@ from numpy.testing.utils import assert_array_equal
 import quantities as pq
 import neo
 import elephant.conversion as conv
-import elephant.spikecorr as sc
+import elephant.spike_train_correlation as sc
 
 
 class corrcoeff_TestCase(unittest.TestCase):

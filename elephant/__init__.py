@@ -8,7 +8,7 @@ docstring goes here.
 
 from . import statistics
 from . import conversion
-from . import spikecorr
+from elephant import spike_train_correlation
 from . import surrogates
 from . import neo_tools
 
